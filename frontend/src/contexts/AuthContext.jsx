@@ -39,6 +39,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -146,6 +147,10 @@ export const AuthProvider = ({ children }) => {
     setUserProfile(null);
   };
 
+  const sendPasswordReset = async (email) => {
+    return sendPasswordResetEmail(auth, email);
+  };
+
   /**
    * Fetch user profile from Firestore
    * This is where role resolution happens
@@ -229,6 +234,7 @@ export const AuthProvider = ({ children }) => {
     register,           // Register function
     login,              // Login function
     logout,             // Logout function
+    sendPasswordReset,  // Password reset email
     refreshProfile: () => currentUser && fetchUserProfile(currentUser.uid),
   };
 
