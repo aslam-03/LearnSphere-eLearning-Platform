@@ -1,0 +1,79 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "published", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "published", "order": "ASCENDING" },
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lessons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "orderIndex", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "enrollments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "enrolledAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "enrollments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "enrolledAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lessonProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "enrollmentId", "order": "ASCENDING" },
+        { "fieldPath": "completed", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quizAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "quizId", "order": "ASCENDING" },
+        { "fieldPath": "attemptNumber", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
