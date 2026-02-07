@@ -1,169 +1,129 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper Functions
+    // Helper function to check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
-    }
-    
+    // Helper function to check if user is admin
     function isAdmin() {
-      return isAuthenticated() && getUserRole() == 'admin';
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
+    // Helper function to check if user is instructor
     function isInstructor() {
-      return isAuthenticated() && (getUserRole() == 'instructor' || getUserRole() == 'admin');
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor';
     }
     
-    function isLearner() {
-      return isAuthenticated() && getUserRole() == 'learner';
-    }
-    
+    // Helper function to check if user is the document owner
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    // Users Collection
+
+    // Users collection
     match /users/{userId} {
-      // Anyone can read user profiles
+      // Anyone authenticated can read user profiles
       allow read: if isAuthenticated();
       
-      // Users can only update their own profile
-      allow update: if isOwner(userId);
+      // Users can create/update their own profile
+      allow create: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
       
-      // Only auth system creates users (via Cloud Functions or client SDK)
-      allow create: if isOwner(userId);
-      
-      // Users cannot delete their own profile
-      allow delete: if false;
+      // Only admins can delete users
+      allow delete: if isAdmin();
     }
-    
-    // Courses Collection
+
+    // Courses collection
     match /courses/{courseId} {
-      // Everyone can read published courses with appropriate visibility
-      allow read: if resource.data.status == 'published' || isInstructor() || isAdmin();
+      // Anyone can read published courses, authenticated users can read all
+      allow read: if true;
       
-      // Only instructors and admins can create courses
-      allow create: if isInstructor();
+      // Instructors and admins can create courses
+      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
       
-      // Only course creator or admin can update
-      allow update: if isAdmin() || 
-                      (isInstructor() && resource.data.instructor_id == request.auth.uid);
-      
-      // Only admin or course creator can delete
-      allow delete: if isAdmin() || 
-                      (isInstructor() && resource.data.instructor_id == request.auth.uid);
+      // Course owner (instructor) or admin can update/delete
+      allow update: if isAuthenticated() && 
+        (resource.data.instructorId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && 
+        (resource.data.instructorId == request.auth.uid || isAdmin());
     }
-    
-    // Lessons Collection
+
+    // Lessons collection
     match /lessons/{lessonId} {
-      // Learners can read lessons if course is published
       allow read: if isAuthenticated();
-      
-      // Only instructors can create lessons
-      allow create: if isInstructor();
-      
-      // Only instructors can update/delete their own course lessons
-      allow update, delete: if isInstructor();
+      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
+      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
     }
-    
-    // Quizzes Collection
+
+    // Quizzes collection
     match /quizzes/{quizId} {
-      // Learners can read quizzes
       allow read: if isAuthenticated();
-      
-      // Only instructors can create/update/delete quizzes
-      allow create, update, delete: if isInstructor();
-      
-      // Quiz Questions Subcollection
-      match /questions/{questionId} {
-        // Same permissions as parent quiz
-        allow read: if isAuthenticated();
-        allow create, update, delete: if isInstructor();
-      }
+      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
+      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
     }
-    
-    // Enrollments Collection
+
+    // Questions collection
+    match /questions/{questionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
+      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
+    }
+
+    // Enrollments collection
     match /enrollments/{enrollmentId} {
-      // Users can read their own enrollments
-      allow read: if isOwner(resource.data.user_id) || isInstructor() || isAdmin();
-      
-      // Users can create enrollments for themselves
-      allow create: if isAuthenticated() && 
-                      request.resource.data.user_id == request.auth.uid;
-      
-      // Users can update their own enrollments
-      allow update: if isOwner(resource.data.user_id);
-      
-      // Cannot delete enrollments
-      allow delete: if false;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
-    
-    // Lesson Progress Collection
-    match /lesson_progress/{progressId} {
-      // Users can read their own progress
-      allow read: if isOwner(resource.data.user_id) || isInstructor();
-      
-      // Users can create/update their own progress
-      allow create, update: if isAuthenticated() && 
-                              request.resource.data.user_id == request.auth.uid;
-      
-      // Cannot delete progress
-      allow delete: if false;
+
+    // Progress collection
+    match /progress/{progressId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isAdmin();
     }
-    
-    // Quiz Attempts Collection
-    match /quiz_attempts/{attemptId} {
-      // Users can read their own attempts, instructors can read all
-      allow read: if isOwner(resource.data.user_id) || isInstructor();
-      
-      // Users can create their own attempts
-      allow create: if isAuthenticated() && 
-                      request.resource.data.user_id == request.auth.uid;
-      
-      // Cannot update or delete attempts
-      allow update, delete: if false;
+
+    // Quiz attempts collection
+    match /quizAttempts/{attemptId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
     }
-    
-    // Reviews Collection
+
+    // Reviews collection
     match /reviews/{reviewId} {
-      // Anyone can read reviews
-      allow read: if isAuthenticated();
-      
-      // Users can create/update their own reviews
-      allow create, update: if isAuthenticated() && 
-                              request.resource.data.user_id == request.auth.uid;
-      
-      // Users can delete their own reviews
-      allow delete: if isOwner(resource.data.user_id);
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
-    
-    // Badges Collection
-    match /badges/{badgeId} {
-      // Everyone can read badges
+
+    // Invitations collection
+    match /invitations/{invitationId} {
       allow read: if isAuthenticated();
-      
-      // Only admins can create/update/delete badges
-      allow create, update, delete: if isAdmin();
+      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
+      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
     }
-    
-    // Course Invitations Collection
-    match /course_invitations/{invitationId} {
-      // Users can read invitations sent to their email
+
+    // Attachments collection
+    match /attachments/{attachmentId} {
       allow read: if isAuthenticated();
-      
-      // Only instructors can create invitations
-      allow create: if isInstructor();
-      
-      // Users can update invitations sent to them (to accept)
-      allow update: if isAuthenticated();
-      
-      // Only invitation creator can delete
-      allow delete: if isInstructor();
+      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
+      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
     }
   }
 }
