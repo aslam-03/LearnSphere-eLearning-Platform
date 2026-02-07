@@ -60,7 +60,7 @@ const CourseView = () => {
 
     try {
       await createOrUpdateReview(
-        userProfile.uid,
+        userProfile.id,
         courseId,
         reviewData.rating,
         reviewData.comment,

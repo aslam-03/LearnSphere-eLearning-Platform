@@ -1,93 +1,81 @@
 // Common Constants and Helpers
+import {
+  LESSON_TYPE_LABELS,
+  LESSON_TYPE_ICONS,
+  ENROLLMENT_STATUS_LABELS,
+  ENROLLMENT_STATUS_COLORS,
+  formatDuration as formatDurationUtil,
+  formatPoints,
+  calculateProgress,
+} from '../constants/database';
 
-// Badge System
-export const BADGE_LEVELS = {
-  'Newbie': 0,
-  'Explorer': 20,
-  'Achiever': 40,
-  'Specialist': 60,
-  'Expert': 80,
-  'Master': 100,
-};
+// Re-export from database constants
+export { formatDuration, formatPoints, calculateProgress } from '../constants/database';
 
-export const getBadgeInfo = (points) => {
-  const badges = Object.entries(BADGE_LEVELS).reverse();
-  for (const [badge, threshold] of badges) {
-    if (points >= threshold) {
-      return {
-        name: badge,
-        threshold,
-        nextBadge: getNextBadge(badge),
-        progress: calculateBadgeProgress(points, badge),
-      };
-    }
+// Badge System - Use quizService.js for full badge functionality
+// These are helper functions for display purposes only
+export const getBadgeDisplayInfo = (badgeData, userPoints) => {
+  if (!badgeData) {
+    return {
+      name: 'No Badge',
+      threshold: 0,
+      nextBadge: null,
+      progress: 0,
+    };
   }
+  
   return {
-    name: 'Newbie',
-    threshold: 0,
-    nextBadge: 'Explorer',
-    progress: (points / 20) * 100,
+    name: badgeData.name,
+    threshold: badgeData.points_required,
+    color: badgeData.color,
+    icon_url: badgeData.icon_url,
   };
 };
 
-const getNextBadge = (currentBadge) => {
-  const badgeNames = Object.keys(BADGE_LEVELS);
-  const currentIndex = badgeNames.indexOf(currentBadge);
-  return currentIndex < badgeNames.length - 1
-    ? badgeNames[currentIndex + 1]
-    : null;
-};
-
-const calculateBadgeProgress = (points, currentBadge) => {
-  const nextBadge = getNextBadge(currentBadge);
-  if (!nextBadge) return 100;
-
-  const currentThreshold = BADGE_LEVELS[currentBadge];
-  const nextThreshold = BADGE_LEVELS[nextBadge];
-  const progress = ((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100;
-  return Math.min(100, Math.max(0, progress));
-};
-
-// Lesson Type Icons (for display)
-export const LESSON_TYPES = {
+// Lesson Type Display Info (for UI rendering)
+export const LESSON_TYPE_DISPLAY = {
   video: {
-    label: 'Video',
+    label: LESSON_TYPE_LABELS?.video || 'Video Lesson',
+    icon: LESSON_TYPE_ICONS?.video || '🎥',
     color: 'text-red-500',
     bgColor: 'bg-red-100',
   },
   document: {
-    label: 'Document',
+    label: LESSON_TYPE_LABELS?.document || 'Document',
+    icon: LESSON_TYPE_ICONS?.document || '📄',
     color: 'text-blue-500',
     bgColor: 'bg-blue-100',
   },
   image: {
-    label: 'Image',
+    label: LESSON_TYPE_LABELS?.image || 'Image',
+    icon: LESSON_TYPE_ICONS?.image || '🖼️',
     color: 'text-green-500',
     bgColor: 'bg-green-100',
   },
   quiz: {
-    label: 'Quiz',
+    label: LESSON_TYPE_LABELS?.quiz || 'Quiz',
+    icon: LESSON_TYPE_ICONS?.quiz || '❓',
     color: 'text-purple-500',
     bgColor: 'bg-purple-100',
   },
 };
 
-// Course Status
-export const COURSE_STATUS = {
-  yet_to_start: {
-    label: 'Not Started',
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-100',
-  },
-  in_progress: {
-    label: 'In Progress',
+// Enrollment Status Display Info (for UI rendering)
+export const ENROLLMENT_STATUS_DISPLAY = {
+  active: {
+    label: ENROLLMENT_STATUS_LABELS?.active || 'In Progress',
     color: 'text-blue-600',
     bgColor: 'bg-blue-100',
   },
   completed: {
-    label: 'Completed',
+    label: ENROLLMENT_STATUS_LABELS?.completed || 'Completed',
     color: 'text-green-600',
     bgColor: 'bg-green-100',
+  },
+  dropped: {
+    label: ENROLLMENT_STATUS_LABELS?.dropped || 'Dropped',
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-100',
   },
 };
 
@@ -101,19 +89,6 @@ export const formatDate = (timestamp) => {
     month: 'short',
     day: 'numeric',
   });
-};
-
-// Format Duration
-export const formatDuration = (minutes) => {
-  if (!minutes) return '0 min';
-  
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  
-  if (hours > 0) {
-    return `${hours}h ${mins}m`;
-  }
-  return `${mins} min`;
 };
 
 // Truncate Text

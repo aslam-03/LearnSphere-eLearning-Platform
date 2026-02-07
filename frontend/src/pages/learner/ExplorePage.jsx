@@ -38,7 +38,7 @@ const CourseDiscovery = () => {
 
     setEnrolling(courseId);
     try {
-      await enrollInCourse(userProfile.uid, courseId);
+      await enrollInCourse(userProfile.id, courseId);
       toast.success('Successfully enrolled!');
       // Optionally redirect to course page
     } catch (error) {
