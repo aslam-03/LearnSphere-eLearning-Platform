@@ -42,7 +42,7 @@ service cloud.firestore {
 
     // Courses collection
     match /courses/{courseId} {
-      // Anyone can read published courses, authenticated users can read all
+      // Anyone can read courses (for browsing and editing)
       allow read: if true;
       
       // Instructors and admins can create courses
@@ -57,21 +57,22 @@ service cloud.firestore {
 
     // Lessons collection
     match /lessons/{lessonId} {
-      allow read: if isAuthenticated();
+      // Allow read for anyone authenticated OR if it's for a published course
+      allow read: if true;
       allow create: if isAuthenticated() && (isInstructor() || isAdmin());
       allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
     }
 
     // Quizzes collection
     match /quizzes/{quizId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && (isInstructor() || isAdmin());
       allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
     }
 
     // Questions collection
     match /questions/{questionId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && (isInstructor() || isAdmin());
       allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
     }

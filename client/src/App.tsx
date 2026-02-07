@@ -41,6 +41,8 @@ function Router() {
       {/* Admin Pages */}
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/instructors" component={ManageInstructors} />
+      <Route path="/admin/course/:id" component={CourseEditor} />
+      <Route path="/admin/course/:courseId/quiz/:quizId" component={QuizBuilder} />
       
       {/* Fallback */}
       <Route component={NotFound} />

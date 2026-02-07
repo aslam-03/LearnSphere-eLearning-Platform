@@ -5,7 +5,7 @@ import { useLessons, useCreateLesson, useUpdateLesson, useDeleteLesson } from "@
 import { useCreateQuiz, useQuizzes, useDeleteQuiz } from "@/hooks/use-quizzes";
 import { useInvitations, useSendInvitation } from "@/hooks/use-invitations";
 import { Button } from "@/components/ui/button";
-import { Link, Redirect, useRoute, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { 
   ArrowLeft, 
   GripVertical, 
@@ -80,13 +80,20 @@ const courseUpdateSchema = z.object({
 type CourseUpdateValues = z.infer<typeof courseUpdateSchema>;
 
 export default function CourseEditor() {
-  const [, params] = useRoute("/instructor/course/:id");
-  const courseId = params?.id || "";
-  const [, navigate] = useLocation();
+  // Support both /instructor/course/:id and /admin/course/:id routes
+  const [location, navigate] = useLocation();
   const { toast } = useToast();
   
+  // Extract courseId from URL path
+  const pathParts = location.split('/');
+  const courseIndex = pathParts.indexOf('course');
+  const courseId = courseIndex !== -1 && pathParts[courseIndex + 1] ? pathParts[courseIndex + 1] : "";
+  const isAdminRoute = location.startsWith('/admin');
+  
+  console.log('CourseEditor - location:', location, 'courseId:', courseId, 'isAdminRoute:', isAdminRoute);
+  
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { data: course, isLoading: courseLoading } = useCourse(courseId);
+  const { data: course, isLoading: courseLoading, error: courseError } = useCourse(courseId);
   const { data: lessonsData, isLoading: lessonsLoading } = useLessons(courseId);
   const { data: quizzesData, isLoading: quizzesLoading } = useQuizzes(courseId);
   const { data: invitations, isLoading: invitationsLoading } = useInvitations(courseId);
@@ -98,6 +105,9 @@ export default function CourseEditor() {
   const createQuiz = useCreateQuiz();
   const deleteQuiz = useDeleteQuiz();
   const sendInvitation = useSendInvitation();
+  
+  // Base path for navigation (admin or instructor)
+  const basePath = isAdminRoute ? '/admin' : '/instructor';
   
   const [activeTab, setActiveTab] = useState("content");
   const [isLessonDialogOpen, setIsLessonDialogOpen] = useState(false);
@@ -131,6 +141,12 @@ export default function CourseEditor() {
     }
   });
 
+  // Early return if no courseId
+  if (!courseId) {
+    console.error('CourseEditor - No courseId found in URL');
+    return <Redirect to={isAdminRoute ? "/admin" : "/instructor"} />;
+  }
+
   if (authLoading || courseLoading || lessonsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -138,8 +154,24 @@ export default function CourseEditor() {
       </div>
     );
   }
+  
+  if (courseError) {
+    console.error('CourseEditor - Error loading course:', courseError);
+    return (
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4">
+        <p className="text-destructive">Error loading course: {(courseError as Error).message}</p>
+        <Button onClick={() => window.location.href = isAdminRoute ? "/admin" : "/instructor"}>
+          Go Back
+        </Button>
+      </div>
+    );
+  }
+  
   if (!isAuthenticated) return <Redirect to="/auth" />;
-  if (!course) return <Redirect to="/instructor" />;
+  if (!course) {
+    console.error('CourseEditor - Course not found for id:', courseId);
+    return <Redirect to={isAdminRoute ? "/admin" : "/instructor"} />;
+  }
 
   const lessons = lessonsData ? [...lessonsData].sort((a, b) => a.order - b.order) : [];
   const quizzes = quizzesData || [];
@@ -200,7 +232,7 @@ export default function CourseEditor() {
               onSuccess: () => {
                 setIsLessonDialogOpen(false);
                 // Navigate to quiz builder
-                navigate(`/instructor/course/${courseId}/quiz/${quiz.id}`);
+                navigate(`${basePath}/course/${courseId}/quiz/${quiz.id}`);
               }
             });
           }
@@ -240,7 +272,7 @@ export default function CourseEditor() {
       rewards: { attempt1: 10, attempt2: 7, attempt3: 5, attempt4Plus: 3 }
     }, {
       onSuccess: (quiz: any) => {
-        navigate(`/instructor/course/${courseId}/quiz/${quiz.id}`);
+        navigate(`${basePath}/course/${courseId}/quiz/${quiz.id}`);
       }
     });
   };
@@ -291,7 +323,7 @@ export default function CourseEditor() {
       <div className="bg-white border-b sticky top-16 z-40">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/instructor">
+            <Link href={basePath}>
               <Button variant="ghost" size="icon">
                 <ArrowLeft className="w-5 h-5" />
               </Button>
@@ -424,7 +456,7 @@ export default function CourseEditor() {
 
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {lesson.type === 'quiz' && lesson.quizId && (
-                          <Link href={`/instructor/course/${courseId}/quiz/${lesson.quizId}`}>
+                          <Link href={`${basePath}/course/${courseId}/quiz/${lesson.quizId}`}>
                             <Button variant="outline" size="sm" className="h-8">
                               Edit Quiz
                             </Button>
@@ -471,6 +503,95 @@ export default function CourseEditor() {
                     }
                   }}
                 />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Tags</CardTitle>
+                <CardDescription>Add tags to help learners find your course</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {(course.tags || []).map((tag, index) => (
+                    <Badge key={index} variant="secondary" className="px-3 py-1 text-sm">
+                      {tag}
+                      <button
+                        type="button"
+                        className="ml-2 hover:text-destructive"
+                        onClick={() => {
+                          const newTags = course.tags.filter((_, i) => i !== index);
+                          updateCourse.mutate({ id: courseId, tags: newTags });
+                        }}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const input = (e.target as HTMLFormElement).elements.namedItem('newTag') as HTMLInputElement;
+                    const newTag = input.value.trim();
+                    if (newTag && !course.tags?.includes(newTag)) {
+                      updateCourse.mutate({ id: courseId, tags: [...(course.tags || []), newTag] });
+                      input.value = '';
+                    }
+                  }}
+                >
+                  <Input name="newTag" placeholder="Add a tag..." className="flex-grow" />
+                  <Button type="submit" size="sm">Add</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Short Description</CardTitle>
+                <CardDescription>A brief summary displayed in course listings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea 
+                  className="min-h-[100px]"
+                  placeholder="Enter a short summary of your course (1-2 sentences)..."
+                  defaultValue={course.shortDescription || ''}
+                  onBlur={(e) => {
+                    if (e.target.value !== (course.shortDescription || '')) {
+                      updateCourse.mutate({ id: courseId, shortDescription: e.target.value });
+                    }
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Category</CardTitle>
+                <CardDescription>Select a category for your course</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Select 
+                  value={course.category || "uncategorized"}
+                  onValueChange={(value) => updateCourse.mutate({ id: courseId, category: value === "uncategorized" ? undefined : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="uncategorized">No Category</SelectItem>
+                    <SelectItem value="programming">Programming</SelectItem>
+                    <SelectItem value="design">Design</SelectItem>
+                    <SelectItem value="business">Business</SelectItem>
+                    <SelectItem value="marketing">Marketing</SelectItem>
+                    <SelectItem value="data-science">Data Science</SelectItem>
+                    <SelectItem value="personal-development">Personal Development</SelectItem>
+                    <SelectItem value="photography">Photography</SelectItem>
+                    <SelectItem value="music">Music</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </CardContent>
             </Card>
           </TabsContent>
@@ -643,7 +764,7 @@ export default function CourseEditor() {
                         <p className="text-xs text-muted-foreground">{quiz.description || 'No description'}</p>
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Link href={`/instructor/course/${courseId}/quiz/${quiz.id}`}>
+                        <Link href={`${basePath}/course/${courseId}/quiz/${quiz.id}`}>
                           <Button variant="outline" size="sm" className="h-8">
                             <Pencil className="w-4 h-4 mr-2" />
                             Edit
@@ -744,6 +865,13 @@ export default function CourseEditor() {
                         onUploadComplete={(url) => lessonForm.setValue("content", url)}
                         className="h-24"
                         label="Or upload a file"
+                        accept={
+                          lessonForm.watch("type") === "document" 
+                            ? ".pdf,application/pdf"
+                            : lessonForm.watch("type") === "image"
+                            ? "image/*"
+                            : "video/*"
+                        }
                       />
                     </div>
                     

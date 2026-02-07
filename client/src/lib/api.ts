@@ -122,11 +122,11 @@ export const coursesApi = {
     
     const course = docToData<Course>(courseDoc);
     
-    // Get lessons
+    // Get lessons (sort client-side to avoid needing composite index)
     const lessonsSnapshot = await getDocs(
-      query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', id), orderBy('order'))
+      query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', id))
     );
-    const lessons = lessonsSnapshot.docs.map(doc => docToData<Lesson>(doc));
+    const lessons = lessonsSnapshot.docs.map(doc => docToData<Lesson>(doc)).sort((a, b) => (a.order || 0) - (b.order || 0));
     
     // Get quizzes
     const quizzesSnapshot = await getDocs(
@@ -224,9 +224,9 @@ export const coursesApi = {
 export const lessonsApi = {
   list: async (courseId: string): Promise<Lesson[]> => {
     const snapshot = await getDocs(
-      query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', courseId), orderBy('order'))
+      query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', courseId))
     );
-    return snapshot.docs.map(doc => docToData<Lesson>(doc));
+    return snapshot.docs.map(doc => docToData<Lesson>(doc)).sort((a, b) => (a.order || 0) - (b.order || 0));
   },
   
   get: async (id: string): Promise<Lesson & { attachments: any[] }> => {
@@ -313,11 +313,11 @@ export const quizzesApi = {
     
     const quiz = docToData<Quiz>(quizDoc);
     
-    // Get questions
+    // Get questions (sort client-side to avoid needing composite index)
     const questionsSnapshot = await getDocs(
-      query(collection(db, COLLECTIONS.QUESTIONS), where('quizId', '==', id), orderBy('order'))
+      query(collection(db, COLLECTIONS.QUESTIONS), where('quizId', '==', id))
     );
-    const questions = questionsSnapshot.docs.map(doc => docToData<Question>(doc));
+    const questions = questionsSnapshot.docs.map(doc => docToData<Question>(doc)).sort((a, b) => (a.order || 0) - (b.order || 0));
     
     return { ...quiz, questions };
   },

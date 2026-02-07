@@ -55,9 +55,13 @@ const rewardsSchema = z.object({
 type RewardsFormValues = z.infer<typeof rewardsSchema>;
 
 export default function QuizBuilder() {
-  const [, params] = useRoute("/instructor/course/:courseId/quiz/:quizId");
-  const courseId = params?.courseId;
-  const quizId = params?.quizId;
+  // Support both /instructor/course/:courseId/quiz/:quizId and /admin/course/:courseId/quiz/:quizId routes
+  const [, instructorParams] = useRoute("/instructor/course/:courseId/quiz/:quizId");
+  const [, adminParams] = useRoute("/admin/course/:courseId/quiz/:quizId");
+  const courseId = instructorParams?.courseId || adminParams?.courseId;
+  const quizId = instructorParams?.quizId || adminParams?.quizId;
+  const isAdminRoute = !!adminParams?.courseId;
+  const basePath = isAdminRoute ? '/admin' : '/instructor';
   
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { data: quiz, isLoading: quizLoading } = useQuiz(quizId);
@@ -106,7 +110,7 @@ export default function QuizBuilder() {
   }
   
   if (!isAuthenticated) return <Redirect to="/auth" />;
-  if (!quiz) return <Redirect to={`/instructor/course/${courseId}`} />;
+  if (!quiz) return <Redirect to={`${basePath}/course/${courseId}`} />;
 
   const questions = quiz.questions || [];
   const currentQuestion = questions[selectedQuestionIndex];
@@ -134,12 +138,16 @@ export default function QuizBuilder() {
   };
 
   const addOption = () => {
-    setOptions([...options, { text: "", isCorrect: false }]);
+    const newOptions = [...options, { text: "", isCorrect: false }];
+    setOptions(newOptions);
+    questionForm.setValue("options", newOptions);
   };
 
   const removeOption = (index: number) => {
     if (options.length > 2) {
-      setOptions(options.filter((_, i) => i !== index));
+      const newOptions = options.filter((_, i) => i !== index);
+      setOptions(newOptions);
+      questionForm.setValue("options", newOptions);
     }
   };
 
@@ -147,15 +155,23 @@ export default function QuizBuilder() {
     const newOptions = [...options];
     newOptions[index].text = text;
     setOptions(newOptions);
+    questionForm.setValue("options", newOptions);
   };
 
   const toggleOptionCorrect = (index: number) => {
     const newOptions = [...options];
     newOptions[index].isCorrect = !newOptions[index].isCorrect;
     setOptions(newOptions);
+    questionForm.setValue("options", newOptions);
   };
 
   const onSubmitQuestion = (data: QuestionFormValues) => {
+    // Validate that at least one option is correct
+    if (!options.some(opt => opt.isCorrect)) {
+      alert("Please mark at least one correct answer");
+      return;
+    }
+
     const questionData = {
       ...data,
       options,
@@ -220,7 +236,7 @@ export default function QuizBuilder() {
       <div className="bg-white border-b sticky top-16 z-40">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href={`/instructor/course/${courseId}`}>
+            <Link href={`${basePath}/course/${courseId}`}>
               <Button variant="ghost" size="icon">
                 <ArrowLeft className="w-5 h-5" />
               </Button>

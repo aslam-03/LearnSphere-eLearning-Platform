@@ -77,9 +77,10 @@ export default function CourseDetails() {
     : 0;
   
   // Check course visibility and access
-  const isPublished = course.isPublished !== false;
-  const hasAccess = isEnrolled || isInstructor || user?.role === 'admin' || 
-    (course.accessRules?.allowGuests);
+  const isPublished = course.published !== false;
+  const canPreview = isInstructor || user?.role === 'admin';
+  const hasAccess = isEnrolled || canPreview || 
+    (course.accessRule === 'open' && isPublished);
 
   const handleEnroll = () => {
     if (!isAuthenticated) {
@@ -105,6 +106,18 @@ export default function CourseDetails() {
   return (
     <div className="min-h-screen bg-background pb-20">
       <Navigation />
+
+      {/* Draft Preview Banner */}
+      {!isPublished && canPreview && (
+        <div className="bg-yellow-500 text-yellow-900 py-2 px-4 text-center text-sm font-medium">
+          <span className="mr-2">This course is not published yet. You are viewing a preview.</span>
+          <Link href={user?.role === 'admin' ? `/admin/course/${courseId}` : `/instructor/course/${courseId}`}>
+            <Button variant="outline" size="sm" className="h-7 px-2 bg-white/80">
+              Edit Course
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Hero Header */}
       <div className="bg-[#0F2854] text-white py-16">
