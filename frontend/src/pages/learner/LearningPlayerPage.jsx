@@ -6,10 +6,10 @@ import {
   getCourse,
   getLessonsByCourse,
   getQuizByLesson,
-  updateLessonProgress,
-  submitQuizAttempt,
   getQuizAttemptsByUser,
 } from '../../services/courseService';
+import { updateLessonProgress } from '../../services/progressService';
+import { submitQuizAttempt } from '../../services/quizService';
 import toast from 'react-hot-toast';
 import { XMarkIcon, CheckCircleIcon, PlayIcon } from '@heroicons/react/24/solid';
 
@@ -76,7 +76,7 @@ const LearningPlayer = () => {
       setQuiz(quizData);
 
       if (quizData && userProfile) {
-        const attempts = await getQuizAttemptsByUser(userProfile.uid, quizData.id);
+        const attempts = await getQuizAttemptsByUser(userProfile.id, quizData.id);
         setQuizAttempts(attempts);
       }
     } catch (error) {
@@ -98,7 +98,7 @@ const LearningPlayer = () => {
     try {
       await updateLessonProgress(
         enrollmentId,
-        userProfile.uid,
+        userProfile.id,
         courseId,
         currentLesson.id,
         true
@@ -148,7 +148,7 @@ const LearningPlayer = () => {
 
     try {
       await submitQuizAttempt({
-        userId: userProfile.uid,
+        userId: userProfile.id,
         courseId,
         quizId: quiz.id,
         lessonId: currentLesson.id,
@@ -165,7 +165,7 @@ const LearningPlayer = () => {
       // Mark lesson as complete
       await updateLessonProgress(
         enrollmentId,
-        userProfile.uid,
+        userProfile.id,
         courseId,
         currentLesson.id,
         true

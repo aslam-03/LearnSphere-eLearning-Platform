@@ -7,6 +7,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  setDoc,
   query,
   where,
   orderBy,
@@ -21,12 +22,12 @@ import { db } from '../config/firebase';
 
 export const createUserProfile = async (uid, userData) => {
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
+  await setDoc(userRef, {
     ...userData,
-    totalPoints: 0,
-    badge: 'Newbie',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    total_points: 0,
+    current_badge_id: null,
+    created_at: serverTimestamp(),
+    updated_at: serverTimestamp(),
   });
 };
 
@@ -40,7 +41,7 @@ export const updateUserProfile = async (uid, data) => {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, {
     ...data,
-    updatedAt: serverTimestamp(),
+    updated_at: serverTimestamp(),
   });
 };
 

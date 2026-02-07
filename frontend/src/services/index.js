@@ -1,8 +1,20 @@
 /**
- * Course Service - All course-related Firestore operations
- * Exported from firestoreHelpers.js
+ * Services - All Firestore operations for LearnSphere
+ * Centralized export point for all service functions
  */
 
-// Re-export all functions from the original firestoreHelpers
-// This file will be properly split later
+// Course management services
 export * from './courseService';
+
+// User management services
+export * from './userService';
+
+// File upload services
+export * from './uploadService';
+
+// Progress tracking services
+export * from './progressService';
+
+// Quiz and gamification services
+export * from './quizService';
+

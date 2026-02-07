@@ -116,7 +116,7 @@ const CourseEditor = () => {
         accessRule: courseData.accessRule,
         published: courseData.published,
         price: parseFloat(courseData.price) || 0,
-        createdBy: userProfile.uid,
+        createdBy: userProfile.id,
       };
 
       if (courseId && courseId !== 'new') {

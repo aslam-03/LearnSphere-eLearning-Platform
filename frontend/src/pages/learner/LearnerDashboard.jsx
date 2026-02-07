@@ -32,7 +32,7 @@ const LearnerDashboard = () => {
 
     setLoading(true);
     try {
-      const fetchedEnrollments = await getEnrollmentsByUser(userProfile.uid);
+      const fetchedEnrollments = await getEnrollmentsByUser(userProfile.id);
       
       // Fetch course details for each enrollment
       const enrollmentsWithCourses = await Promise.all(

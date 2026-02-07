@@ -34,7 +34,7 @@ const InstructorDashboard = () => {
     
     setLoading(true);
     try {
-      const fetchedCourses = await getCoursesByInstructor(userProfile.uid);
+      const fetchedCourses = await getCoursesByInstructor(userProfile.id);
       setCourses(fetchedCourses);
     } catch (error) {
       console.error('Error fetching courses:', error);
