@@ -4,6 +4,7 @@ import { useLessons } from "@/hooks/use-lessons";
 import { useQuiz, useQuizAttempts, useSubmitQuizAttempt } from "@/hooks/use-quizzes";
 import { useReviews, useCreateReview } from "@/hooks/use-reviews";
 import { useAuth } from "@/hooks/use-auth";
+import { PDFViewer } from "@/components/PDFViewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -219,13 +220,17 @@ function QuizPlayer({
 // Reviews Tab Component
 function ReviewsTab({ courseId }: { courseId: string }) {
   const { user } = useAuth();
-  const { data: reviews, isLoading } = useReviews(courseId);
+  const { data: reviewsResponse, isLoading } = useReviews(courseId);
   const createReview = useCreateReview();
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [hoveredStar, setHoveredStar] = useState(0);
 
-  const hasReviewed = reviews?.some(r => r.userId === user?.id);
+  // Destructure reviews array from API response
+  const reviewsList = reviewsResponse?.reviews || [];
+  const apiAverageRating = reviewsResponse?.averageRating || 0;
+
+  const hasReviewed = reviewsList?.some(r => r.userId === user?.id);
 
   const handleSubmitReview = () => {
     createReview.mutate({
@@ -240,9 +245,7 @@ function ReviewsTab({ courseId }: { courseId: string }) {
     });
   };
 
-  const averageRating = reviews?.length
-    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
-    : "0.0";
+  const averageRating = apiAverageRating.toFixed(1);
 
   return (
     <div className="space-y-6">
@@ -264,7 +267,7 @@ function ReviewsTab({ courseId }: { courseId: string }) {
             ))}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {reviews?.length || 0} reviews
+            {reviewsList?.length || 0} reviews
           </p>
         </div>
       </div>
@@ -322,12 +325,12 @@ function ReviewsTab({ courseId }: { courseId: string }) {
           <div className="flex justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
-        ) : reviews?.length === 0 ? (
+        ) : reviewsList?.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">
             No reviews yet. Be the first to review!
           </p>
         ) : (
-          reviews?.map(review => (
+          reviewsList?.map(review => (
             <Card key={review.id}>
               <CardContent className="pt-4">
                 <div className="flex items-start justify-between">
@@ -372,8 +375,12 @@ export default function Learn() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { data: course, isLoading: courseLoading } = useCourse(courseId);
   const { data: lessons, isLoading: lessonsLoading } = useLessons(courseId);
-  const { data: progressData, isLoading: progressLoading } = useCourseProgress(courseId);
+  const { data: progressResponse, isLoading: progressLoading } = useCourseProgress(courseId);
   const updateProgress = useUpdateProgress();
+  
+  // Extract progress array from API response
+  const progressData = progressResponse?.progress || [];
+  const percentageFromApi = progressResponse?.percentage || 0;
 
   const [activeLessonId, setActiveLessonId] = useState<string | null>(initialLessonId || null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -451,7 +458,7 @@ export default function Learn() {
 
   const percentComplete = progressData && sortedLessons.length
     ? Math.round((progressData.filter(p => p.completed).length / sortedLessons.length) * 100)
-    : 0;
+    : percentageFromApi;
 
   const getLessonIcon = (type: string) => {
     switch (type) {
@@ -597,16 +604,16 @@ export default function Learn() {
                         )}
                       </div>
                     ) : (
-                      <div className="bg-white rounded-2xl shadow-sm border mb-8 p-8">
+                      <div className="bg-white rounded-2xl shadow-sm border mb-8">
                         {activeLesson.content ? (
-                          activeLesson.content.endsWith('.pdf') ? (
-                            <iframe 
+                          activeLesson.content.startsWith('data:application/pdf') || activeLesson.content.endsWith('.pdf') ? (
+                            <PDFViewer 
                               src={activeLesson.content}
-                              className="w-full h-[70vh] rounded-lg"
                               title={activeLesson.title}
+                              className="rounded-lg"
                             />
                           ) : (
-                            <div className="prose max-w-none">
+                            <div className="prose max-w-none p-8">
                               <div dangerouslySetInnerHTML={{ __html: activeLesson.content }} />
                             </div>
                           )

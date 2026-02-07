@@ -2,6 +2,7 @@ import { Navigation } from "@/components/Navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useCourse, usePublishCourse, useUpdateCourse } from "@/hooks/use-courses";
 import { useLessons, useCreateLesson, useUpdateLesson, useDeleteLesson } from "@/hooks/use-lessons";
+import { PDFViewer } from "@/components/PDFViewer";
 import { useCreateQuiz, useQuizzes, useDeleteQuiz } from "@/hooks/use-quizzes";
 import { useInvitations, useSendInvitation } from "@/hooks/use-invitations";
 import { Button } from "@/components/ui/button";
@@ -888,6 +889,33 @@ export default function CourseEditor() {
                             : "video/*"
                         }
                       />
+                      
+                      {/* Content Preview */}
+                      {lessonForm.watch("content") && (
+                        <div className="mt-4 p-4 border rounded-lg bg-muted/30">
+                          <div className="text-sm font-medium mb-2">Preview:</div>
+                          {lessonForm.watch("type") === "document" && (
+                            lessonForm.watch("content").startsWith('data:application/pdf') || lessonForm.watch("content").endsWith('.pdf') ? (
+                              <div className="max-h-[300px] overflow-hidden rounded border">
+                                <PDFViewer 
+                                  src={lessonForm.watch("content")}
+                                  title="Preview"
+                                  className="h-[300px]"
+                                />
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">URL preview will appear when lesson is saved</p>
+                            )
+                          )}
+                          {lessonForm.watch("type") === "image" && (
+                            <img 
+                              src={lessonForm.watch("content")} 
+                              alt="Preview"
+                              className="max-h-[300px] max-w-full object-contain rounded"
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
                     
                     {(lessonForm.watch("type") === "document" || lessonForm.watch("type") === "image") && (
