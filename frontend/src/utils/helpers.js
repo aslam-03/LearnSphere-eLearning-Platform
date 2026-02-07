@@ -137,3 +137,39 @@ export const calculateQuizScore = (correctAnswers, totalQuestions) => {
   if (totalQuestions === 0) return 0;
   return Math.round((correctAnswers / totalQuestions) * 100);
 };
+
+// Generate Public Course Link
+export const generateCourseLink = (courseId) => {
+  const baseUrl = window.location.origin;
+  return `${baseUrl}/courses/${courseId}`;
+};
+
+// Copy Text to Clipboard
+export const copyToClipboard = async (text) => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } else {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return true;
+      } catch (err) {
+        document.body.removeChild(textArea);
+        return false;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to copy:', err);
+    return false;
+  }
+};
