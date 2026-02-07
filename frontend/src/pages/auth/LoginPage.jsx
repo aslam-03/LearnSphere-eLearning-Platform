@@ -35,8 +35,11 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
   
-  const { login, currentUser, userProfile, loading } = useAuth();
+  const { login, sendPasswordReset, currentUser, userProfile, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -94,7 +97,9 @@ const LoginPage = () => {
       // User-friendly error messages
       let errorMessage = 'Failed to login. Please try again.';
       
-      if (error.code === 'auth/user-not-found') {
+      if (error.code === 'auth/email-not-verified') {
+        errorMessage = 'Please verify your email. We just sent a new verification link.';
+      } else if (error.code === 'auth/user-not-found') {
         errorMessage = 'No account found with this email.';
       } else if (error.code === 'auth/wrong-password') {
         errorMessage = 'Incorrect password.';
@@ -108,6 +113,27 @@ const LoginPage = () => {
       
       toast.error(errorMessage);
       setIsSubmitting(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    const targetEmail = (resetEmail || email).trim();
+
+    if (!targetEmail || !targetEmail.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await sendPasswordReset(targetEmail);
+      toast.success('Password reset email sent. Check your inbox.');
+      setShowReset(false);
+    } catch (error) {
+      console.error('Password reset error:', error);
+      toast.error('Failed to send reset email. Please try again.');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -176,6 +202,51 @@ const LoginPage = () => {
                 required
               />
             </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setShowReset((prev) => !prev)}
+                className="text-sm text-indigo-600 hover:text-indigo-700 font-semibold transition"
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            {showReset && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <label htmlFor="resetEmail" className="block text-sm font-semibold text-gray-700">
+                  Email for password reset
+                </label>
+                <input
+                  id="resetEmail"
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  disabled={isResetting}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    disabled={isResetting}
+                    className="bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isResetting ? 'Sending...' : 'Send Reset Link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowReset(false)}
+                    className="text-gray-600 hover:text-gray-800 font-semibold transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

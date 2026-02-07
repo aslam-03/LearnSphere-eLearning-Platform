@@ -89,10 +89,11 @@ const RegisterPage = () => {
         'learner' // ← Hardcoded: only learners can self-register
       );
       
-      toast.success('Account created successfully! Welcome to LearnSphere!');
+      toast.success('Account created! Check your inbox to verify your email.');
+      setIsSubmitting(false);
+      navigate('/login', { replace: true });
       
-      // Note: Navigation happens automatically via useEffect
-      // when userProfile is loaded by AuthContext
+      // User must verify email before logging in
       
     } catch (error) {
       console.error('Registration error:', error);
