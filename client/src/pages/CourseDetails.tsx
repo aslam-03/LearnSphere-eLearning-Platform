@@ -57,9 +57,13 @@ export default function CourseDetails() {
   const { user, isAuthenticated } = useAuth();
   const { data: course, isLoading } = useCourse(courseId);
   const { data: enrollments } = useMyEnrollments();
-  const { data: reviews } = useReviews(courseId);
+  const { data: reviewsResponse } = useReviews(courseId);
   const enroll = useEnroll();
   const createReview = useCreateReview();
+
+  // Destructure reviews array from API response
+  const reviewsList = reviewsResponse?.reviews || [];
+  const apiAverageRating = reviewsResponse?.averageRating || 0;
 
   const [newReviewRating, setNewReviewRating] = useState(0);
   const [newReviewContent, setNewReviewContent] = useState("");
@@ -69,12 +73,10 @@ export default function CourseDetails() {
 
   const isEnrolled = enrollments?.some(e => e.courseId === courseId);
   const isInstructor = user?.id === course.instructorId;
-  const userHasReviewed = reviews?.some(r => r.userId === user?.id);
+  const userHasReviewed = reviewsList?.some(r => r.userId === user?.id);
   
-  // Calculate average rating
-  const avgRating = reviews?.length 
-    ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length 
-    : 0;
+  // Use API average rating directly
+  const avgRating = apiAverageRating;
   
   // Check course visibility and access
   const isPublished = course.published !== false;
@@ -158,7 +160,7 @@ export default function CourseDetails() {
                 {avgRating > 0 && (
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    <span>{avgRating.toFixed(1)} ({reviews?.length} reviews)</span>
+                    <span>{avgRating.toFixed(1)} ({reviewsList?.length} reviews)</span>
                   </div>
                 )}
               </div>
@@ -175,7 +177,7 @@ export default function CourseDetails() {
               <TabsTrigger value="content">Course Content</TabsTrigger>
               <TabsTrigger value="reviews" className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4" />
-                Reviews ({reviews?.length || 0})
+                Reviews ({reviewsList?.length || 0})
               </TabsTrigger>
             </TabsList>
 
@@ -278,12 +280,12 @@ export default function CourseDetails() {
                     <div className="text-center">
                       <p className="text-4xl font-bold">{avgRating.toFixed(1)}</p>
                       <StarRating rating={Math.round(avgRating)} />
-                      <p className="text-sm text-muted-foreground mt-1">{reviews?.length || 0} reviews</p>
+                      <p className="text-sm text-muted-foreground mt-1">{reviewsList?.length || 0} reviews</p>
                     </div>
                     <div className="flex-1 space-y-2">
                       {[5, 4, 3, 2, 1].map((star) => {
-                        const count = reviews?.filter(r => r.rating === star).length || 0;
-                        const percentage = reviews?.length ? (count / reviews.length) * 100 : 0;
+                        const count = reviewsList?.filter(r => r.rating === star).length || 0;
+                        const percentage = reviewsList?.length ? (count / reviewsList.length) * 100 : 0;
                         return (
                           <div key={star} className="flex items-center gap-2 text-sm">
                             <span className="w-3">{star}</span>
@@ -304,9 +306,9 @@ export default function CourseDetails() {
               </Card>
 
               {/* Reviews List */}
-              {reviews?.length ? (
+              {reviewsList?.length ? (
                 <div className="space-y-4">
-                  {reviews.map((review) => (
+                  {reviewsList.map((review) => (
                     <Card key={review.id}>
                       <CardContent className="pt-6">
                         <div className="flex items-start gap-4">
