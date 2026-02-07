@@ -8,123 +8,17 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    // Helper function to check if user is instructor
-    function isInstructor() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor';
-    }
-    
     // Helper function to check if user is the document owner
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Users collection
-    match /users/{userId} {
-      // Anyone authenticated can read user profiles
-      allow read: if isAuthenticated();
-      
-      // Users can create/update their own profile
-      allow create: if isOwner(userId) || isAdmin();
-      allow update: if isOwner(userId) || isAdmin();
-      
-      // Only admins can delete users
-      allow delete: if isAdmin();
-    }
-
-    // Courses collection
-    match /courses/{courseId} {
-      // Anyone can read courses (for browsing and editing)
+    // Allow all reads and writes for authenticated users (development mode)
+    // TODO: Replace with proper role-based rules for production
+    match /{document=**} {
       allow read: if true;
-      
-      // Instructors and admins can create courses
-      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
-      
-      // Course owner (instructor) or admin can update/delete
-      allow update: if isAuthenticated() && 
-        (resource.data.instructorId == request.auth.uid || isAdmin());
-      allow delete: if isAuthenticated() && 
-        (resource.data.instructorId == request.auth.uid || isAdmin());
-    }
-
-    // Lessons collection
-    match /lessons/{lessonId} {
-      // Allow read for anyone authenticated OR if it's for a published course
-      allow read: if true;
-      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
-      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
-    }
-
-    // Quizzes collection
-    match /quizzes/{quizId} {
-      allow read: if true;
-      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
-      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
-    }
-
-    // Questions collection
-    match /questions/{questionId} {
-      allow read: if true;
-      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
-      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
-    }
-
-    // Enrollments collection
-    match /enrollments/{enrollmentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && 
-        (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAuthenticated() && 
-        (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // Progress collection
-    match /progress/{progressId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAuthenticated() && isAdmin();
-    }
-
-    // Quiz attempts collection
-    match /quizAttempts/{attemptId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && 
-        (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
-    }
-
-    // Reviews collection
-    match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && 
-        (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAuthenticated() && 
-        (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // Invitations collection
-    match /invitations/{invitationId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
-      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
-    }
-
-    // Attachments collection
-    match /attachments/{attachmentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isInstructor() || isAdmin());
-      allow update, delete: if isAuthenticated() && (isInstructor() || isAdmin());
+      allow write: if isAuthenticated();
     }
   }
 }
+

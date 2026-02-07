@@ -376,7 +376,22 @@ export default function CourseEditor() {
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <FileUpload 
                 onUploadComplete={(url) => {
-                  updateCourse.mutate({ id: courseId, coverImage: url });
+                  console.log("Upload complete, saving to Firestore:", url);
+                  if (url) {
+                    updateCourse.mutate(
+                      { id: courseId, coverImage: url },
+                      {
+                        onSuccess: () => {
+                          console.log("Cover image saved successfully");
+                        },
+                        onError: (error) => {
+                          console.error("Failed to save cover image:", error);
+                        }
+                      }
+                    );
+                  } else {
+                    console.error("No URL returned from upload");
+                  }
                 }}
                 className="w-auto"
                 label="Change Image"
