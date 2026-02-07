@@ -1,7 +1,7 @@
 import { useCourse } from "@/hooks/use-courses";
 import { useCourseProgress, useUpdateProgress } from "@/hooks/use-progress";
 import { useLessons } from "@/hooks/use-lessons";
-import { useQuiz, useQuizAttempts, useSubmitQuizAttempt } from "@/hooks/use-quizzes";
+import { useQuiz, useQuizzes, useQuizAttempts, useSubmitQuizAttempt } from "@/hooks/use-quizzes";
 import { useReviews, useCreateReview } from "@/hooks/use-reviews";
 import { useAuth } from "@/hooks/use-auth";
 import { PDFViewer } from "@/components/PDFViewer";
@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Link, Redirect, useRoute } from "wouter";
 import { 
   ArrowLeft, 
-  Menu, 
   CheckCircle, 
   ChevronRight,
   ChevronLeft,
@@ -22,8 +21,7 @@ import {
   HelpCircle,
   Star,
   Award,
-  Loader2,
-  X
+  Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -44,10 +42,14 @@ import {
 // Quiz Player Component
 function QuizPlayer({ 
   quizId, 
-  onComplete 
+  onComplete,
+  onMarkComplete,
+  isQuizCompleted
 }: { 
   quizId: string;
   onComplete: (score: number, points: number) => void;
+  onMarkComplete: () => void;
+  isQuizCompleted: boolean;
 }) {
   const { data: quiz, isLoading } = useQuiz(quizId);
   const { data: attempts } = useQuizAttempts(quizId);
@@ -136,14 +138,38 @@ function QuizPlayer({
               Attempt #{attemptNumber}
             </p>
           </div>
-          <Button onClick={() => {
-            setCurrentQuestion(0);
-            setAnswers({});
-            setShowResults(false);
-            setResults(null);
-          }}>
-            Try Again
-          </Button>
+          <div className="space-y-3">
+            {!isQuizCompleted && (
+              <Button 
+                onClick={onMarkComplete}
+                size="lg"
+                className="w-full"
+                variant="default"
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Mark as Complete
+              </Button>
+            )}
+            {isQuizCompleted && (
+              <Badge variant="secondary" className="w-full justify-center h-10 text-sm bg-green-100 text-green-700 hover:bg-green-100">
+                <CheckCircle className="w-3 h-3 mr-2" />
+                Completed
+              </Badge>
+            )}
+            <Button 
+              onClick={() => {
+                setCurrentQuestion(0);
+                setAnswers({});
+                setShowResults(false);
+                setResults(null);
+              }}
+              variant="outline"
+              size="lg"
+              className="w-full"
+            >
+              Try Again
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -375,6 +401,7 @@ export default function Learn() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { data: course, isLoading: courseLoading } = useCourse(courseId);
   const { data: lessons, isLoading: lessonsLoading } = useLessons(courseId);
+  const { data: quizzesData, isLoading: quizzesLoading } = useQuizzes(courseId);
   const { data: progressResponse, isLoading: progressLoading } = useCourseProgress(courseId);
   const updateProgress = useUpdateProgress();
   
@@ -383,7 +410,6 @@ export default function Learn() {
   const percentageFromApi = progressResponse?.percentage || 0;
 
   const [activeLessonId, setActiveLessonId] = useState<string | null>(initialLessonId || null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState("content");
   const [showPointsPopup, setShowPointsPopup] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
@@ -399,7 +425,7 @@ export default function Learn() {
     }
   }, [lessons, progressData, activeLessonId]);
 
-  if (authLoading || courseLoading || lessonsLoading || progressLoading) {
+  if (authLoading || courseLoading || lessonsLoading || progressLoading || quizzesLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -411,11 +437,31 @@ export default function Learn() {
   if (!course) return <Redirect to="/404" />;
 
   const sortedLessons = lessons ? [...lessons].sort((a, b) => a.order - b.order) : [];
-  const activeLesson = sortedLessons.find(l => l.id === activeLessonId);
   
-  const activeIndex = sortedLessons.findIndex(l => l.id === activeLessonId);
-  const nextLesson = sortedLessons[activeIndex + 1];
-  const prevLesson = sortedLessons[activeIndex - 1];
+  // Add quizzes at the end of lessons
+  let allLessonsWithQuiz = [...sortedLessons];
+  if (quizzesData && quizzesData.length > 0) {
+    const quizLessons = quizzesData.map((quiz, idx) => ({
+      id: `quiz-${quiz.id}`,
+      courseId: courseId,
+      title: quiz.title,
+      type: 'quiz' as const,
+      quizId: quiz.id,
+      order: sortedLessons.length + idx + 1,
+      description: quiz.description,
+      content: '',
+      allowDownload: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    allLessonsWithQuiz = [...sortedLessons, ...quizLessons];
+  }
+  
+  const activeLesson = allLessonsWithQuiz.find(l => l.id === activeLessonId);
+  
+  const activeIndex = allLessonsWithQuiz.findIndex(l => l.id === activeLessonId);
+  const nextLesson = allLessonsWithQuiz[activeIndex + 1];
+  const prevLesson = allLessonsWithQuiz[activeIndex - 1];
 
   const isCompleted = (lessonId: string) => 
     progressData?.some(p => p.lessonId === lessonId && p.completed);
@@ -428,12 +474,8 @@ export default function Learn() {
         courseId
       }, {
         onSuccess: () => {
-          // Show points popup
-          setEarnedPoints(10);
-          setShowPointsPopup(true);
-          setTimeout(() => setShowPointsPopup(false), 3000);
-          
-          // Auto advance
+          // No points for completing regular content
+          // Auto advance to next lesson
           if (nextLesson) {
             setActiveLessonId(nextLesson.id);
           }
@@ -456,9 +498,59 @@ export default function Learn() {
     }
   };
 
-  const percentComplete = progressData && sortedLessons.length
-    ? Math.round((progressData.filter(p => p.completed).length / sortedLessons.length) * 100)
-    : percentageFromApi;
+  const handleQuizMarkComplete = () => {
+    // Check if quiz is the last item and all previous items are completed
+    const isLastLesson = activeIndex === allLessonsWithQuiz.length - 1;
+    const allPreviousCompleted = completedNonQuizLessons === nonQuizLessons;
+    
+    // Check if this is a quiz and if it's marked complete
+    const quizzesInCourse = allLessonsWithQuiz.filter(l => l.type === 'quiz');
+    const allQuizzesCompleted = quizzesInCourse.every(q => isCompleted(q.id));
+    
+    if (isLastLesson && allPreviousCompleted && allQuizzesCompleted) {
+      // Course is complete!
+      handleCourseComplete();
+    } else if (isLastLesson && allPreviousCompleted) {
+      // All lessons done, waiting for quiz completion
+      setShowPointsPopup(true);
+      setEarnedPoints(10);
+      setTimeout(() => setShowPointsPopup(false), 3000);
+    }
+  };
+
+  const handleCourseComplete = () => {
+    // Award course completion bonus points
+    const courseCompletionBonus = 25;
+    setEarnedPoints(courseCompletionBonus);
+    setShowPointsPopup(true);
+    setTimeout(() => setShowPointsPopup(false), 3000);
+    setCourseCompleted(true);
+  };
+
+  // Calculate completion percentage including both lessons and quiz
+  const nonQuizLessons = sortedLessons.length;
+  const completedNonQuizLessons = progressData?.filter(p => 
+    !p.lessonId.startsWith('quiz-') && p.completed
+  ).length || 0;
+  
+  // Count quizzes that are completed
+  const quizzesInCourse = allLessonsWithQuiz.filter(l => l.type === 'quiz');
+  const completedQuizzes = quizzesInCourse.filter(q => isCompleted(q.id)).length;
+  
+  // Total items considering lessons and at least one quiz (if exists)
+  const totalItems = nonQuizLessons + (quizzesInCourse.length > 0 ? 1 : 0); // Count all quizzes as one item
+  const completedItems = completedNonQuizLessons + (completedQuizzes > 0 ? 1 : 0);
+  
+  const percentComplete = totalItems > 0
+    ? Math.round((completedItems / totalItems) * 100)
+    : 0;
+
+  // Calculate if course is fully completed (all lessons + quiz)
+  const allNonQuizCompleted = completedNonQuizLessons === nonQuizLessons && nonQuizLessons > 0;
+  const quizCompleted = quizzesData && quizzesData.length > 0 
+    ? allLessonsWithQuiz.filter(l => l.type === 'quiz').some(q => isCompleted(q.id))
+    : true; // If no quiz, course can be completed without it
+  const isCourseFullyCompleted = allNonQuizCompleted && quizCompleted;
 
   const getLessonIcon = (type: string) => {
     switch (type) {
@@ -501,18 +593,113 @@ export default function Learn() {
             </div>
             <Progress value={percentComplete} className="h-2" />
           </div>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="md:hidden"
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
         </div>
       </header>
 
       <div className="flex-grow flex overflow-hidden">
+        {/* Sidebar Lesson List - LEFT SIDE */}
+        <aside className="w-80 bg-white border-r flex-shrink-0 h-full">
+        
+          <div className="h-full flex flex-col">
+            <div className="p-4 border-b bg-muted/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Course Content</span>
+              </div>
+              {/* Progress Bar in Sidebar */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Progress</span>
+                  <span className="font-medium text-primary">{percentComplete}%</span>
+                </div>
+                <Progress value={percentComplete} className="h-2" />
+              </div>
+            </div>
+            <ScrollArea className="flex-grow">
+              <div className="divide-y">
+                {allLessonsWithQuiz.map((lesson, idx) => {
+                  const isActive = lesson.id === activeLessonId;
+                  const completed = isCompleted(lesson.id);
+                  
+                  return (
+                    <button
+                      key={lesson.id}
+                      onClick={() => {
+                        setActiveLessonId(lesson.id);
+                        setActiveTab("content");
+                      }}
+                      className={cn(
+                        "w-full text-left p-4 flex gap-3 transition-all hover:bg-muted/50",
+                        isActive && "bg-primary/5 border-l-4 border-primary pl-3",
+                        completed && "opacity-75"
+                      )}
+                    >
+                      <div className="pt-0.5 flex-shrink-0">
+                        {completed ? (
+                          <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                          </div>
+                        ) : (
+                          <div className={cn(
+                            "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                            isActive ? "border-primary bg-primary/10" : "border-muted-foreground/40"
+                          )}>
+                            {getLessonIcon(lesson.type)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={cn(
+                            "text-sm font-medium truncate flex-1",
+                            completed && "text-muted-foreground line-through"
+                          )}>
+                            {idx + 1}. {lesson.title}
+                          </p>
+                          {completed && (
+                            <Badge 
+                              variant="secondary" 
+                              className="flex-shrink-0 bg-green-100 text-green-700 hover:bg-green-100 text-xs"
+                            >
+                              Done
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-muted-foreground capitalize">
+                            {lesson.type}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+            
+            {/* Course Completion Status */}
+            <div className="p-4 border-t bg-muted/5 space-y-3">
+              <div className="text-xs font-medium text-muted-foreground">
+                <div className="flex justify-between mb-2">
+                  <span>{completedItems} of {totalItems} completed</span>
+                </div>
+              </div>
+              {percentComplete === 100 ? (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <CheckCircle className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-semibold text-sm">Course Complete! 🎉</span>
+                  </div>
+                  <p className="text-xs text-green-600 mt-1">Great job! You've finished all content.</p>
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  <span>{totalItems - completedItems} item{totalItems - completedItems !== 1 ? 's' : ''} remaining</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+
         {/* Main Content Area */}
         <main className="flex-grow overflow-y-auto bg-muted/20 relative">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
@@ -551,6 +738,8 @@ export default function Learn() {
                       <QuizPlayer 
                         quizId={activeLesson.quizId || activeLesson.id} 
                         onComplete={handleQuizComplete}
+                        onMarkComplete={handleQuizMarkComplete}
+                        isQuizCompleted={isCompleted(activeLesson.id)}
                       />
                     ) : activeLesson.type === 'video' ? (
                       <div className="bg-black rounded-2xl shadow-sm border mb-8 aspect-video overflow-hidden">
@@ -672,12 +861,19 @@ export default function Learn() {
                             <Button 
                               onClick={handleComplete}
                               disabled={updateProgress.isPending}
+                              variant="default"
                             >
                               {updateProgress.isPending && (
                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                               )}
                               Mark as Complete
                             </Button>
+                          )}
+                          {isCompleted(activeLesson.id) && (
+                            <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 h-fit">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Completed
+                            </Badge>
                           )}
                           {nextLesson && (
                             <Button 
@@ -705,103 +901,39 @@ export default function Learn() {
                 <ReviewsTab courseId={courseId} />
               </div>
             </TabsContent>
-          </Tabs>
-        </main>
 
-        {/* Sidebar Lesson List */}
-        <aside 
-          className={cn(
-            "w-80 bg-white border-l flex-shrink-0 transition-all duration-300 absolute md:relative h-full z-10",
-            sidebarOpen ? "right-0" : "-right-80 md:w-0 md:border-l-0 md:overflow-hidden"
-          )}
-        >
-          <div className="h-full flex flex-col">
-            <div className="p-4 border-b bg-muted/10 flex items-center justify-between">
-              <span className="font-medium">Course Content</span>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="md:hidden"
-                onClick={() => setSidebarOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <ScrollArea className="flex-grow">
-              <div className="divide-y">
-                {sortedLessons.map((lesson, idx) => {
-                  const isActive = lesson.id === activeLessonId;
-                  const completed = isCompleted(lesson.id);
-                  
-                  return (
-                    <button
-                      key={lesson.id}
-                      onClick={() => {
-                        setActiveLessonId(lesson.id);
-                        setActiveTab("content");
-                        if (window.innerWidth < 768) setSidebarOpen(false);
-                      }}
-                      className={cn(
-                        "w-full text-left p-4 flex gap-3 transition-colors hover:bg-muted/50",
-                        isActive && "bg-primary/5 border-l-4 border-primary pl-3"
-                      )}
+            {/* Course Completion Dialog */}
+            {isCourseFullyCompleted && !courseCompleted && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <Card className="max-w-md w-full animate-in fade-in zoom-in-95 duration-300">
+                  <CardContent className="pt-12 pb-8 text-center">
+                    <div className="w-24 h-24 mx-auto mb-6 rounded-full flex items-center justify-center bg-gradient-to-br from-green-100 to-green-200">
+                      <CheckCircle className="w-12 h-12 text-green-600" />
+                    </div>
+                    <h2 className="text-3xl font-bold mb-2">Course Completed!</h2>
+                    <p className="text-muted-foreground mb-6">
+                      Congratulations! You've successfully completed the entire course.
+                    </p>
+                    <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-4 mb-8">
+                      <div className="flex items-center justify-center gap-2">
+                        <Award className="w-6 h-6 text-primary" />
+                        <span className="font-bold text-2xl text-primary">+25 Points</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">Course Completion Bonus</p>
+                    </div>
+                    <Button 
+                      onClick={handleCourseComplete}
+                      size="lg"
+                      className="w-full"
                     >
-                      <div className="pt-0.5">
-                        {completed ? (
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        ) : (
-                          <div className={cn(
-                            "w-5 h-5 rounded-full border-2 flex items-center justify-center",
-                            isActive ? "border-primary" : "border-muted-foreground/40"
-                          )}>
-                            {getLessonIcon(lesson.type)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          "text-sm font-medium truncate",
-                          completed && "text-muted-foreground"
-                        )}>
-                          {idx + 1}. {lesson.title}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-muted-foreground capitalize">
-                            {lesson.type}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-            
-            {/* Course Completion Status */}
-            {percentComplete === 100 && (
-              <div className="p-4 border-t bg-green-50">
-                <div className="flex items-center gap-2 text-green-700">
-                  <CheckCircle className="w-5 h-5" />
-                  <span className="font-medium">Course Completed!</span>
-                </div>
+                      Claim Reward & Continue
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
             )}
-          </div>
-        </aside>
-
-        {/* Sidebar Toggle for Desktop */}
-        <Button
-          variant="secondary"
-          size="sm"
-          className={cn(
-            "absolute right-4 top-20 z-10 shadow-md hidden md:flex", 
-            sidebarOpen && "right-84"
-          )}
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
-          {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          {sidebarOpen ? "" : "Content"}
-        </Button>
+          </Tabs>
+        </main>
       </div>
     </div>
   );
