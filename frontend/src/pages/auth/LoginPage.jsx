@@ -97,9 +97,7 @@ const LoginPage = () => {
       // User-friendly error messages
       let errorMessage = 'Failed to login. Please try again.';
       
-      if (error.code === 'auth/email-not-verified') {
-        errorMessage = 'Please verify your email. We just sent a new verification link.';
-      } else if (error.code === 'auth/user-not-found') {
+      if (error.code === 'auth/user-not-found') {
         errorMessage = 'No account found with this email.';
       } else if (error.code === 'auth/wrong-password') {
         errorMessage = 'Incorrect password.';

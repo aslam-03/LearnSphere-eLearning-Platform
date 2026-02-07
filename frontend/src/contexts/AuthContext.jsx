@@ -39,7 +39,6 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  sendEmailVerification,
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -117,9 +116,8 @@ export const AuthProvider = ({ children }) => {
       
       await setDoc(userRef, userData);
 
-      await sendEmailVerification(user);
-      await signOut(auth);
-      setUserProfile(null);
+      // Fetch and set profile immediately
+      await fetchUserProfile(user.uid);
 
       return user;
     } catch (error) {
@@ -137,18 +135,7 @@ export const AuthProvider = ({ children }) => {
    * @returns {Promise<UserCredential>} Firebase user credential
    */
   const login = async (email, password) => {
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-
-    if (!credential.user.emailVerified) {
-      await sendEmailVerification(credential.user);
-      await signOut(auth);
-      setUserProfile(null);
-      const err = new Error('Email not verified');
-      err.code = 'auth/email-not-verified';
-      throw err;
-    }
-
-    return credential;
+    return signInWithEmailAndPassword(auth, email, password);
   };
 
   /**
@@ -217,13 +204,6 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(user);
       
       if (user) {
-        if (!user.emailVerified) {
-          await signOut(auth);
-          setUserProfile(null);
-          setLoading(false);
-          return;
-        }
-
         // User is logged in - fetch their profile and role from Firestore
         try {
           await fetchUserProfile(user.uid);
