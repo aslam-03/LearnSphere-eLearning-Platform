@@ -82,6 +82,7 @@ const LoginPage = () => {
     setIsSubmitting(true);
     
     try {
+      console.log("Attempting login with email2:", email);
       // Login via Firebase Auth
       await login(email, password);
       

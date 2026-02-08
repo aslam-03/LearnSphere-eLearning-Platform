@@ -143,7 +143,31 @@ function App() {
               }
             />
             <Route
+              path="/instructor/courses"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'instructor']}>
+                  <InstructorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/instructor/courses/new"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'instructor']}>
+                  <CourseEditPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/instructor/courses/:courseId/edit"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'instructor']}>
+                  <CourseEditPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/instructor/courses/:courseId/report"
               element={
                 <ProtectedRoute allowedRoles={['admin', 'instructor']}>
                   <CourseEditPage />
