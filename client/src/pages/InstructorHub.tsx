@@ -202,6 +202,9 @@ export default function InstructorHub() {
       instructorId: user?.id,
       coverImage: data.coverImage || undefined,
       tags: data.tags,
+      difficulty: 'Beginner',
+      learningObjectives: [],
+      prerequisites: [],
     }),
     onSuccess: (course: any) => {
       queryClient.invalidateQueries({ queryKey: ['instructor', 'courses'] });

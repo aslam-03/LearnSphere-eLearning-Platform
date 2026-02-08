@@ -30,6 +30,29 @@ export type InsertUser = z.infer<typeof userSchema>;
 // =====================
 // COURSE TYPES
 // =====================
+
+
+export const courseSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().default(''),
+  shortDescription: z.string().optional(),
+  instructorId: z.string().optional(),
+  published: z.boolean().default(false),
+  price: z.number().int().min(0).optional(),
+  visibility: z.enum(['everyone', 'signed_in']).default('everyone'),
+  accessRule: z.enum(['open', 'invitation', 'payment']).default('open'),
+  coverImage: z.string().url().optional(),
+  tags: z.array(z.string()).default([]),
+  category: z.string().optional(),
+  totalDuration: z.number().int().min(0).optional(),
+  difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']).default('Intermediate'),
+  learningObjectives: z.array(z.string()).default([]),
+  prerequisites: z.array(z.string()).default([]),
+});
+
+export type InsertCourse = z.infer<typeof courseSchema>;
+
+// Extend Course interface manually since zod inference doesn't cover populated fields perfectly in this context
 export interface Course {
   id: string;
   title: string;
@@ -47,28 +70,16 @@ export interface Course {
   viewsCount: number;
   createdAt: Date;
   updatedAt: Date;
+  // New fields
+  difficulty?: 'Beginner' | 'Intermediate' | 'Advanced';
+  learningObjectives?: string[];
+  prerequisites?: string[];
+  enrollmentCount?: number;
   // Populated fields
   instructor?: User;
   lessons?: Lesson[];
   quizzes?: Quiz[];
 }
-
-export const courseSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().default(''),
-  shortDescription: z.string().optional(),
-  instructorId: z.string().optional(),
-  published: z.boolean().default(false),
-  price: z.number().int().min(0).optional(),
-  visibility: z.enum(['everyone', 'signed_in']).default('everyone'),
-  accessRule: z.enum(['open', 'invitation', 'payment']).default('open'),
-  coverImage: z.string().url().optional(),
-  tags: z.array(z.string()).default([]),
-  category: z.string().optional(),
-  totalDuration: z.number().int().min(0).optional(),
-});
-
-export type InsertCourse = z.infer<typeof courseSchema>;
 
 // =====================
 // LESSON TYPES

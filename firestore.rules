@@ -16,8 +16,7 @@ service cloud.firestore {
     // Allow all reads and writes for authenticated users (development mode)
     // TODO: Replace with proper role-based rules for production
     match /{document=**} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
   }
 }

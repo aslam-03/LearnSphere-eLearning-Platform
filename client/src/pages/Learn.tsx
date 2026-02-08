@@ -10,9 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Link, Redirect, useRoute } from "wouter";
-import { 
-  ArrowLeft, 
-  CheckCircle, 
+import {
+  ArrowLeft,
+  CheckCircle,
   ChevronRight,
   ChevronLeft,
   FileText,
@@ -40,12 +40,12 @@ import {
 } from "@/components/ui/dialog";
 
 // Quiz Player Component
-function QuizPlayer({ 
-  quizId, 
+function QuizPlayer({
+  quizId,
   onComplete,
   onMarkComplete,
   isQuizCompleted
-}: { 
+}: {
   quizId: string;
   onComplete: (score: number, points: number) => void;
   onMarkComplete: () => void;
@@ -54,7 +54,7 @@ function QuizPlayer({
   const { data: quiz, isLoading } = useQuiz(quizId);
   const { data: attempts } = useQuizAttempts(quizId);
   const submitAttempt = useSubmitQuizAttempt();
-  
+
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [showResults, setShowResults] = useState(false);
@@ -93,7 +93,7 @@ function QuizPlayer({
       quizId,
       answers: Object.entries(answers).map(([questionId, selected]) => ({
         questionId,
-        selectedOptions: selected.map(Number)
+        selectedOption: Math.max(...selected.map(Number)) // Take the last selected option as number
       }))
     }, {
       onSuccess: (data: any) => {
@@ -110,13 +110,12 @@ function QuizPlayer({
   if (showResults && results) {
     const percentage = Math.round((results.score / questions.length) * 100);
     const passed = percentage >= 70;
-    
+
     return (
       <Card className="max-w-lg mx-auto">
         <CardContent className="pt-8 text-center">
-          <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${
-            passed ? "bg-green-100" : "bg-amber-100"
-          }`}>
+          <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${passed ? "bg-green-100" : "bg-amber-100"
+            }`}>
             {passed ? (
               <CheckCircle className="w-10 h-10 text-green-600" />
             ) : (
@@ -140,7 +139,7 @@ function QuizPlayer({
           </div>
           <div className="space-y-3">
             {!isQuizCompleted && (
-              <Button 
+              <Button
                 onClick={onMarkComplete}
                 size="lg"
                 className="w-full"
@@ -156,7 +155,7 @@ function QuizPlayer({
                 Completed
               </Badge>
             )}
-            <Button 
+            <Button
               onClick={() => {
                 setCurrentQuestion(0);
                 setAnswers({});
@@ -186,7 +185,7 @@ function QuizPlayer({
       </CardHeader>
       <CardContent>
         <p className="text-lg font-medium mb-6">{question.text}</p>
-        
+
         <RadioGroup
           value={answers[question.id]?.[0] || ""}
           onValueChange={(value) => handleSelectAnswer(question.id, value)}
@@ -219,7 +218,7 @@ function QuizPlayer({
             <ChevronLeft className="w-4 h-4 mr-2" />
             Previous
           </Button>
-          
+
           {currentQuestion < questions.length - 1 ? (
             <Button
               onClick={() => setCurrentQuestion(prev => prev + 1)}
@@ -361,7 +360,7 @@ function ReviewsTab({ courseId }: { courseId: string }) {
               <CardContent className="pt-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-medium">{review.userName || "Anonymous"}</p>
+                    <p className="font-medium">{review.user?.displayName || "Anonymous"}</p>
                     <div className="flex gap-1 mt-1">
                       {[1, 2, 3, 4, 5].map(star => (
                         <Star
@@ -397,14 +396,14 @@ export default function Learn() {
   const [, lessonParams] = useRoute("/learn/:courseId/lesson/:lessonId");
   const courseId = params?.courseId || lessonParams?.courseId || "";
   const initialLessonId = lessonParams?.lessonId;
-  
+
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { data: course, isLoading: courseLoading } = useCourse(courseId);
+  const { data: course, isLoading: courseLoading, error: courseError } = useCourse(courseId);
   const { data: lessons, isLoading: lessonsLoading } = useLessons(courseId);
   const { data: quizzesData, isLoading: quizzesLoading } = useQuizzes(courseId);
   const { data: progressResponse, isLoading: progressLoading } = useCourseProgress(courseId);
   const updateProgress = useUpdateProgress();
-  
+
   // Extract progress array from API response
   const progressData = progressResponse?.progress || [];
   const percentageFromApi = progressResponse?.percentage || 0;
@@ -413,12 +412,13 @@ export default function Learn() {
   const [activeTab, setActiveTab] = useState("content");
   const [showPointsPopup, setShowPointsPopup] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
+  const [courseCompleted, setCourseCompleted] = useState(false);
 
   // Set initial active lesson
   useEffect(() => {
     if (lessons && lessons.length > 0 && !activeLessonId) {
       const sortedLessons = [...lessons].sort((a, b) => a.order - b.order);
-      const firstUncompleted = sortedLessons.find(l => 
+      const firstUncompleted = sortedLessons.find(l =>
         !progressData?.some(p => p.lessonId === l.id && p.completed)
       );
       setActiveLessonId(firstUncompleted?.id || sortedLessons[0].id);
@@ -432,12 +432,33 @@ export default function Learn() {
       </div>
     );
   }
-  
+
   if (!isAuthenticated) return <Redirect to="/auth" />;
-  if (!course) return <Redirect to="/404" />;
+
+  if (courseError || (!course && !courseLoading)) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-4">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+          <HelpCircle className="w-8 h-8 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Unable to Load Course Content</h1>
+        <p className="text-muted-foreground mb-6 max-w-md">
+          {courseError ? (courseError as Error).message : "The course content could not be found or you don't have access."}
+        </p>
+        <div className="flex gap-4">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+          <Link href="/dashboard">
+            <Button>Return to Dashboard</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const sortedLessons = lessons ? [...lessons].sort((a, b) => a.order - b.order) : [];
-  
+
   // Add quizzes at the end of lessons
   let allLessonsWithQuiz = [...sortedLessons];
   if (quizzesData && quizzesData.length > 0) {
@@ -456,14 +477,14 @@ export default function Learn() {
     }));
     allLessonsWithQuiz = [...sortedLessons, ...quizLessons];
   }
-  
+
   const activeLesson = allLessonsWithQuiz.find(l => l.id === activeLessonId);
-  
+
   const activeIndex = allLessonsWithQuiz.findIndex(l => l.id === activeLessonId);
   const nextLesson = allLessonsWithQuiz[activeIndex + 1];
   const prevLesson = allLessonsWithQuiz[activeIndex - 1];
 
-  const isCompleted = (lessonId: string) => 
+  const isCompleted = (lessonId: string) =>
     progressData?.some(p => p.lessonId === lessonId && p.completed);
 
   const handleComplete = () => {
@@ -488,7 +509,7 @@ export default function Learn() {
     setEarnedPoints(points);
     setShowPointsPopup(true);
     setTimeout(() => setShowPointsPopup(false), 3000);
-    
+
     if (activeLessonId) {
       updateProgress.mutate({
         lessonId: activeLessonId,
@@ -502,11 +523,11 @@ export default function Learn() {
     // Check if quiz is the last item and all previous items are completed
     const isLastLesson = activeIndex === allLessonsWithQuiz.length - 1;
     const allPreviousCompleted = completedNonQuizLessons === nonQuizLessons;
-    
+
     // Check if this is a quiz and if it's marked complete
     const quizzesInCourse = allLessonsWithQuiz.filter(l => l.type === 'quiz');
     const allQuizzesCompleted = quizzesInCourse.every(q => isCompleted(q.id));
-    
+
     if (isLastLesson && allPreviousCompleted && allQuizzesCompleted) {
       // Course is complete!
       handleCourseComplete();
@@ -529,25 +550,25 @@ export default function Learn() {
 
   // Calculate completion percentage including both lessons and quiz
   const nonQuizLessons = sortedLessons.length;
-  const completedNonQuizLessons = progressData?.filter(p => 
+  const completedNonQuizLessons = progressData?.filter(p =>
     !p.lessonId.startsWith('quiz-') && p.completed
   ).length || 0;
-  
+
   // Count quizzes that are completed
   const quizzesInCourse = allLessonsWithQuiz.filter(l => l.type === 'quiz');
   const completedQuizzes = quizzesInCourse.filter(q => isCompleted(q.id)).length;
-  
+
   // Total items considering lessons and at least one quiz (if exists)
   const totalItems = nonQuizLessons + (quizzesInCourse.length > 0 ? 1 : 0); // Count all quizzes as one item
   const completedItems = completedNonQuizLessons + (completedQuizzes > 0 ? 1 : 0);
-  
+
   const percentComplete = totalItems > 0
     ? Math.round((completedItems / totalItems) * 100)
     : 0;
 
   // Calculate if course is fully completed (all lessons + quiz)
   const allNonQuizCompleted = completedNonQuizLessons === nonQuizLessons && nonQuizLessons > 0;
-  const quizCompleted = quizzesData && quizzesData.length > 0 
+  const quizCompleted = quizzesData && quizzesData.length > 0
     ? allLessonsWithQuiz.filter(l => l.type === 'quiz').some(q => isCompleted(q.id))
     : true; // If no quiz, course can be completed without it
   const isCourseFullyCompleted = allNonQuizCompleted && quizCompleted;
@@ -583,9 +604,9 @@ export default function Learn() {
             </Button>
           </Link>
           <div className="h-6 w-px bg-border mx-2" />
-          <h1 className="font-bold text-lg truncate max-w-md">{course.title}</h1>
+          <h1 className="font-bold text-lg truncate max-w-md">{course?.title}</h1>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <div className="hidden md:flex flex-col items-end mr-4 w-32">
             <div className="flex justify-between w-full text-xs mb-1">
@@ -599,7 +620,7 @@ export default function Learn() {
       <div className="flex-grow flex overflow-hidden">
         {/* Sidebar Lesson List - LEFT SIDE */}
         <aside className="w-80 bg-white border-r flex-shrink-0 h-full">
-        
+
           <div className="h-full flex flex-col">
             <div className="p-4 border-b bg-muted/10 space-y-3">
               <div className="flex items-center justify-between">
@@ -619,7 +640,7 @@ export default function Learn() {
                 {allLessonsWithQuiz.map((lesson, idx) => {
                   const isActive = lesson.id === activeLessonId;
                   const completed = isCompleted(lesson.id);
-                  
+
                   return (
                     <button
                       key={lesson.id}
@@ -656,8 +677,8 @@ export default function Learn() {
                             {idx + 1}. {lesson.title}
                           </p>
                           {completed && (
-                            <Badge 
-                              variant="secondary" 
+                            <Badge
+                              variant="secondary"
                               className="flex-shrink-0 bg-green-100 text-green-700 hover:bg-green-100 text-xs"
                             >
                               Done
@@ -675,7 +696,7 @@ export default function Learn() {
                 })}
               </div>
             </ScrollArea>
-            
+
             {/* Course Completion Status */}
             <div className="p-4 border-t bg-muted/5 space-y-3">
               <div className="text-xs font-medium text-muted-foreground">
@@ -712,7 +733,7 @@ export default function Learn() {
                 </TabsTrigger>
               </TabsList>
             </div>
-            
+
             <TabsContent value="content" className="flex-1 m-0 overflow-y-auto">
               <div className="max-w-4xl mx-auto p-6 md:p-12 min-h-full flex flex-col">
                 {activeLesson ? (
@@ -735,8 +756,8 @@ export default function Learn() {
 
                     {/* Content Viewer based on type */}
                     {activeLesson.type === 'quiz' ? (
-                      <QuizPlayer 
-                        quizId={activeLesson.quizId || activeLesson.id} 
+                      <QuizPlayer
+                        quizId={(activeLesson as any).quizId || activeLesson.id}
                         onComplete={handleQuizComplete}
                         onMarkComplete={handleQuizMarkComplete}
                         isQuizCompleted={isCompleted(activeLesson.id)}
@@ -745,24 +766,24 @@ export default function Learn() {
                       <div className="bg-black rounded-2xl shadow-sm border mb-8 aspect-video overflow-hidden">
                         {activeLesson.content ? (
                           activeLesson.content.includes("youtube") || activeLesson.content.includes("youtu.be") ? (
-                            <iframe 
+                            <iframe
                               src={activeLesson.content
                                 .replace("watch?v=", "embed/")
-                                .replace("youtu.be/", "youtube.com/embed/")} 
-                              className="w-full h-full" 
-                              allowFullScreen 
+                                .replace("youtu.be/", "youtube.com/embed/")}
+                              className="w-full h-full"
+                              allowFullScreen
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             />
                           ) : activeLesson.content.includes("vimeo") ? (
-                            <iframe 
-                              src={activeLesson.content.replace("vimeo.com/", "player.vimeo.com/video/")} 
-                              className="w-full h-full" 
-                              allowFullScreen 
+                            <iframe
+                              src={activeLesson.content.replace("vimeo.com/", "player.vimeo.com/video/")}
+                              className="w-full h-full"
+                              allowFullScreen
                             />
                           ) : (
-                            <video 
-                              src={activeLesson.content} 
-                              controls 
+                            <video
+                              src={activeLesson.content}
+                              controls
                               className="w-full h-full"
                             />
                           )
@@ -778,10 +799,10 @@ export default function Learn() {
                     ) : activeLesson.type === 'image' ? (
                       <div className="bg-white rounded-2xl shadow-sm border mb-8 p-4 overflow-hidden">
                         {activeLesson.content ? (
-                          <img 
-                            src={activeLesson.content} 
+                          <img
+                            src={activeLesson.content}
                             alt={activeLesson.title}
-                            className="w-full max-h-[70vh] object-contain mx-auto rounded-lg" 
+                            className="w-full max-h-[70vh] object-contain mx-auto rounded-lg"
                           />
                         ) : (
                           <div className="h-64 flex items-center justify-center bg-muted rounded-lg">
@@ -796,7 +817,7 @@ export default function Learn() {
                       <div className="bg-white rounded-2xl shadow-sm border mb-8">
                         {activeLesson.content ? (
                           activeLesson.content.startsWith('data:application/pdf') || activeLesson.content.endsWith('.pdf') ? (
-                            <PDFViewer 
+                            <PDFViewer
                               src={activeLesson.content}
                               title={activeLesson.title}
                               className="rounded-lg"
@@ -847,8 +868,8 @@ export default function Learn() {
                     {/* Navigation (not for quizzes) */}
                     {activeLesson.type !== 'quiz' && (
                       <div className="mt-auto pt-8 border-t flex justify-between items-center">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           onClick={() => prevLesson && setActiveLessonId(prevLesson.id)}
                           disabled={!prevLesson}
                         >
@@ -858,7 +879,7 @@ export default function Learn() {
 
                         <div className="flex gap-2">
                           {!isCompleted(activeLesson.id) && (
-                            <Button 
+                            <Button
                               onClick={handleComplete}
                               disabled={updateProgress.isPending}
                               variant="default"
@@ -876,7 +897,7 @@ export default function Learn() {
                             </Badge>
                           )}
                           {nextLesson && (
-                            <Button 
+                            <Button
                               variant={isCompleted(activeLesson.id) ? "default" : "outline"}
                               onClick={() => setActiveLessonId(nextLesson.id)}
                             >
@@ -895,7 +916,7 @@ export default function Learn() {
                 )}
               </div>
             </TabsContent>
-            
+
             <TabsContent value="reviews" className="flex-1 m-0 overflow-y-auto">
               <div className="max-w-2xl mx-auto p-6 md:p-12">
                 <ReviewsTab courseId={courseId} />
@@ -921,7 +942,7 @@ export default function Learn() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">Course Completion Bonus</p>
                     </div>
-                    <Button 
+                    <Button
                       onClick={handleCourseComplete}
                       size="lg"
                       className="w-full"

@@ -1,7 +1,7 @@
 // Firestore-based API - Direct client-side database access
-import { 
-  auth, 
-  db, 
+import {
+  auth,
+  db,
   COLLECTIONS,
   collection,
   doc,
@@ -60,7 +60,7 @@ export const authApi = {
   getCurrentUser: async (): Promise<User | null> => {
     const user = auth.currentUser;
     if (!user) return null;
-    
+
     const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     if (!userDoc.exists()) {
       return {
@@ -73,16 +73,16 @@ export const authApi = {
     }
     return docToData<User>(userDoc);
   },
-  
+
   updateProfile: async (data: Partial<User>): Promise<User> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), {
       ...data,
       updatedAt: serverTimestamp(),
     });
-    
+
     const updated = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     return docToData<User>(updated);
   },
@@ -94,10 +94,10 @@ export const authApi = {
 export const coursesApi = {
   list: async (params?: { search?: string; instructorId?: string; published?: boolean }): Promise<Course[]> => {
     let q = query(collection(db, COLLECTIONS.COURSES), orderBy('createdAt', 'desc'));
-    
+
     const snapshot = await getDocs(q);
     let courses = snapshot.docs.map(doc => docToData<Course>(doc));
-    
+
     // Client-side filtering
     if (params?.instructorId) {
       courses = courses.filter(c => c.instructorId === params.instructorId);
@@ -107,51 +107,53 @@ export const coursesApi = {
     }
     if (params?.search) {
       const searchLower = params.search.toLowerCase();
-      courses = courses.filter(c => 
+      courses = courses.filter(c =>
         c.title.toLowerCase().includes(searchLower) ||
         c.description.toLowerCase().includes(searchLower)
       );
     }
-    
+
     return courses;
   },
-  
+
   get: async (id: string): Promise<Course & { lessons: Lesson[]; quizzes: Quiz[]; instructor: User }> => {
     const courseDoc = await getDoc(doc(db, COLLECTIONS.COURSES, id));
     if (!courseDoc.exists()) throw new Error('Course not found');
-    
+
     const course = docToData<Course>(courseDoc);
-    
+
     // Get lessons (sort client-side to avoid needing composite index)
     const lessonsSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', id))
     );
     const lessons = lessonsSnapshot.docs.map(doc => docToData<Lesson>(doc)).sort((a, b) => (a.order || 0) - (b.order || 0));
-    
+
     // Get quizzes
     const quizzesSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.QUIZZES), where('courseId', '==', id))
     );
     const quizzes = quizzesSnapshot.docs.map(doc => docToData<Quiz>(doc));
-    
+
     // Get instructor
     let instructor: User = { id: course.instructorId, displayName: 'Unknown', email: '', role: 'instructor', points: 0 } as User;
-    try {
-      const instructorDoc = await getDoc(doc(db, COLLECTIONS.USERS, course.instructorId));
-      if (instructorDoc.exists()) {
-        instructor = docToData<User>(instructorDoc);
+    if (course.instructorId) {
+      try {
+        const instructorDoc = await getDoc(doc(db, COLLECTIONS.USERS, course.instructorId));
+        if (instructorDoc.exists()) {
+          instructor = docToData<User>(instructorDoc);
+        }
+      } catch (e) {
+        console.error('Error fetching instructor:', e);
       }
-    } catch (e) {
-      console.error('Error fetching instructor:', e);
     }
-    
+
     return { ...course, lessons, quizzes, instructor };
   },
-  
+
   create: async (data: InsertCourse): Promise<Course> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     const courseData = {
       ...data,
       instructorId: user.uid,
@@ -164,56 +166,58 @@ export const coursesApi = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.COURSES), courseData);
     return { id: docRef.id, ...courseData, createdAt: new Date(), updatedAt: new Date() } as Course;
   },
-  
+
   update: async (id: string, data: Partial<InsertCourse>): Promise<Course> => {
     await updateDoc(doc(db, COLLECTIONS.COURSES, id), {
       ...data,
       updatedAt: serverTimestamp(),
     });
-    
+
     const updated = await getDoc(doc(db, COLLECTIONS.COURSES, id));
     return docToData<Course>(updated);
   },
-  
+
   delete: async (id: string): Promise<void> => {
     await deleteDoc(doc(db, COLLECTIONS.COURSES, id));
   },
-  
+
   publish: async (id: string, published: boolean): Promise<Course> => {
     await updateDoc(doc(db, COLLECTIONS.COURSES, id), {
       published,
       updatedAt: serverTimestamp(),
     });
-    
+
     const updated = await getDoc(doc(db, COLLECTIONS.COURSES, id));
     return docToData<Course>(updated);
   },
-  
+
   getEnrollments: async (courseId: string): Promise<(Enrollment & { user: User })[]> => {
     const snapshot = await getDocs(
       query(collection(db, COLLECTIONS.ENROLLMENTS), where('courseId', '==', courseId))
     );
-    
+
     const enrollments = await Promise.all(
       snapshot.docs.map(async (enrollmentDoc) => {
         const enrollment = docToData<Enrollment>(enrollmentDoc);
         let user: User = { id: enrollment.userId, displayName: 'Unknown', email: '', role: 'learner', points: 0 } as User;
-        
-        try {
-          const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, enrollment.userId));
-          if (userDoc.exists()) {
-            user = docToData<User>(userDoc);
-          }
-        } catch (e) {}
-        
+
+        if (enrollment.userId) {
+          try {
+            const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, enrollment.userId));
+            if (userDoc.exists()) {
+              user = docToData<User>(userDoc);
+            }
+          } catch (e) { }
+        }
+
         return { ...enrollment, user };
       })
     );
-    
+
     return enrollments;
   },
 };
@@ -228,22 +232,22 @@ export const lessonsApi = {
     );
     return snapshot.docs.map(doc => docToData<Lesson>(doc)).sort((a, b) => (a.order || 0) - (b.order || 0));
   },
-  
+
   get: async (id: string): Promise<Lesson & { attachments: any[] }> => {
     const lessonDoc = await getDoc(doc(db, COLLECTIONS.LESSONS, id));
     if (!lessonDoc.exists()) throw new Error('Lesson not found');
-    
+
     const lesson = docToData<Lesson>(lessonDoc);
-    
+
     // Get attachments
     const attachmentsSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.ATTACHMENTS), where('lessonId', '==', id))
     );
     const attachments = attachmentsSnapshot.docs.map(doc => docToData<any>(doc));
-    
+
     return { ...lesson, attachments };
   },
-  
+
   create: async (courseId: string, data: InsertLesson): Promise<Lesson> => {
     const lessonData = {
       ...data,
@@ -251,46 +255,46 @@ export const lessonsApi = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.LESSONS), lessonData);
     return { id: docRef.id, ...lessonData, createdAt: new Date(), updatedAt: new Date() } as Lesson;
   },
-  
+
   update: async (id: string, data: Partial<InsertLesson>): Promise<Lesson> => {
     await updateDoc(doc(db, COLLECTIONS.LESSONS, id), {
       ...data,
       updatedAt: serverTimestamp(),
     });
-    
+
     const updated = await getDoc(doc(db, COLLECTIONS.LESSONS, id));
     return docToData<Lesson>(updated);
   },
-  
+
   delete: async (id: string): Promise<void> => {
     await deleteDoc(doc(db, COLLECTIONS.LESSONS, id));
   },
-  
+
   reorder: async (courseId: string, lessonOrders: { id: string; order: number }[]): Promise<void> => {
     const batch = writeBatch(db);
-    
+
     for (const { id, order } of lessonOrders) {
       batch.update(doc(db, COLLECTIONS.LESSONS, id), { order });
     }
-    
+
     await batch.commit();
   },
-    
+
   addAttachment: async (lessonId: string, data: { type: 'file' | 'link'; name: string; url: string }) => {
     const attachmentData = {
       ...data,
       lessonId,
       createdAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.ATTACHMENTS), attachmentData);
     return { id: docRef.id, ...attachmentData };
   },
-    
+
   deleteAttachment: async (attachmentId: string): Promise<void> => {
     await deleteDoc(doc(db, COLLECTIONS.ATTACHMENTS, attachmentId));
   },
@@ -306,22 +310,22 @@ export const quizzesApi = {
     );
     return snapshot.docs.map(doc => docToData<Quiz>(doc));
   },
-  
+
   get: async (id: string): Promise<Quiz & { questions: Question[] }> => {
     const quizDoc = await getDoc(doc(db, COLLECTIONS.QUIZZES, id));
     if (!quizDoc.exists()) throw new Error('Quiz not found');
-    
+
     const quiz = docToData<Quiz>(quizDoc);
-    
+
     // Get questions (sort client-side to avoid needing composite index)
     const questionsSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.QUESTIONS), where('quizId', '==', id))
     );
     const questions = questionsSnapshot.docs.map(doc => docToData<Question>(doc)).sort((a, b) => (a.order || 0) - (b.order || 0));
-    
+
     return { ...quiz, questions };
   },
-  
+
   create: async (courseId: string, data: InsertQuiz): Promise<Quiz> => {
     const quizData = {
       ...data,
@@ -329,58 +333,58 @@ export const quizzesApi = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.QUIZZES), quizData);
     return { id: docRef.id, ...quizData, createdAt: new Date(), updatedAt: new Date() } as Quiz;
   },
-  
+
   update: async (id: string, data: Partial<InsertQuiz>): Promise<Quiz> => {
     await updateDoc(doc(db, COLLECTIONS.QUIZZES, id), {
       ...data,
       updatedAt: serverTimestamp(),
     });
-    
+
     const updated = await getDoc(doc(db, COLLECTIONS.QUIZZES, id));
     return docToData<Quiz>(updated);
   },
-  
+
   delete: async (id: string): Promise<void> => {
     await deleteDoc(doc(db, COLLECTIONS.QUIZZES, id));
   },
-  
+
   addQuestion: async (quizId: string, data: InsertQuestion): Promise<Question> => {
     const questionData = {
       ...data,
       quizId,
       createdAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.QUESTIONS), questionData);
     return { id: docRef.id, ...questionData, createdAt: new Date() } as Question;
   },
-    
+
   updateQuestion: async (questionId: string, data: Partial<InsertQuestion>): Promise<Question> => {
     await updateDoc(doc(db, COLLECTIONS.QUESTIONS, questionId), data);
-    
+
     const updated = await getDoc(doc(db, COLLECTIONS.QUESTIONS, questionId));
     return docToData<Question>(updated);
   },
-    
+
   deleteQuestion: async (questionId: string): Promise<void> => {
     await deleteDoc(doc(db, COLLECTIONS.QUESTIONS, questionId));
   },
-  
+
   submitAttempt: async (quizId: string, answers: { questionId: string; selectedOption: number }[]): Promise<QuizAttempt> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Get quiz and questions
     const quiz = await quizzesApi.get(quizId);
-    
+
     // Calculate score
     let score = 0;
     let totalPoints = 0;
-    
+
     for (const question of quiz.questions) {
       totalPoints += question.points || 10;
       const answer = answers.find(a => a.questionId === question.id);
@@ -388,7 +392,7 @@ export const quizzesApi = {
         score += question.points || 10;
       }
     }
-    
+
     // Get previous attempts count
     const prevAttemptsSnapshot = await getDocs(
       query(
@@ -398,7 +402,7 @@ export const quizzesApi = {
       )
     );
     const attemptNumber = prevAttemptsSnapshot.size + 1;
-    
+
     // Calculate points earned based on attempt number
     let pointsEarned = score;
     if (quiz.rewards) {
@@ -407,7 +411,7 @@ export const quizzesApi = {
       else if (attemptNumber === 3) pointsEarned = Math.round(score * quiz.rewards.attempt3 / 10);
       else pointsEarned = Math.round(score * quiz.rewards.attempt4Plus / 10);
     }
-    
+
     const attemptData = {
       quizId,
       userId: user.uid,
@@ -418,24 +422,24 @@ export const quizzesApi = {
       pointsEarned,
       completedAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.QUIZ_ATTEMPTS), attemptData);
-    
+
     // Award points to user
     await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), {
       points: increment(pointsEarned),
     });
-    
+
     return { id: docRef.id, ...attemptData, completedAt: new Date() } as QuizAttempt;
   },
-    
+
   getAttempts: async (quizId: string): Promise<QuizAttempt[]> => {
     const user = auth.currentUser;
     if (!user) return [];
-    
+
     const snapshot = await getDocs(
       query(
-        collection(db, COLLECTIONS.QUIZ_ATTEMPTS), 
+        collection(db, COLLECTIONS.QUIZ_ATTEMPTS),
         where('quizId', '==', quizId),
         where('userId', '==', user.uid)
       )
@@ -451,34 +455,34 @@ export const enrollmentsApi = {
   list: async (): Promise<(Enrollment & { course: Course })[]> => {
     const user = auth.currentUser;
     if (!user) return [];
-    
+
     const snapshot = await getDocs(
       query(collection(db, COLLECTIONS.ENROLLMENTS), where('userId', '==', user.uid))
     );
-    
+
     const enrollments = await Promise.all(
       snapshot.docs.map(async (enrollmentDoc) => {
         const enrollment = docToData<Enrollment>(enrollmentDoc);
         let course: Course = { id: enrollment.courseId, title: '', description: '', instructorId: '' } as Course;
-        
+
         try {
           const courseDoc = await getDoc(doc(db, COLLECTIONS.COURSES, enrollment.courseId));
           if (courseDoc.exists()) {
             course = docToData<Course>(courseDoc);
           }
-        } catch (e) {}
-        
+        } catch (e) { }
+
         return { ...enrollment, course };
       })
     );
-    
+
     return enrollments;
   },
-  
+
   enroll: async (courseId: string): Promise<Enrollment> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Check if already enrolled
     const existingSnapshot = await getDocs(
       query(
@@ -487,11 +491,11 @@ export const enrollmentsApi = {
         where('courseId', '==', courseId)
       )
     );
-    
+
     if (!existingSnapshot.empty) {
       return docToData<Enrollment>(existingSnapshot.docs[0]);
     }
-    
+
     const enrollmentData = {
       userId: user.uid,
       courseId,
@@ -499,15 +503,15 @@ export const enrollmentsApi = {
       enrolledAt: serverTimestamp(),
       timeSpent: 0,
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.ENROLLMENTS), enrollmentData);
     return { id: docRef.id, ...enrollmentData, enrolledAt: new Date(), timeSpent: 0 } as Enrollment;
   },
-  
+
   complete: async (courseId: string): Promise<Enrollment> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     const snapshot = await getDocs(
       query(
         collection(db, COLLECTIONS.ENROLLMENTS),
@@ -515,20 +519,20 @@ export const enrollmentsApi = {
         where('courseId', '==', courseId)
       )
     );
-    
+
     if (snapshot.empty) throw new Error('Enrollment not found');
-    
+
     const enrollmentDoc = snapshot.docs[0];
     await updateDoc(enrollmentDoc.ref, {
       status: 'completed',
       completedAt: serverTimestamp(),
     });
-    
+
     // Award points
     await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), {
       points: increment(100),
     });
-    
+
     const updated = await getDoc(enrollmentDoc.ref);
     return docToData<Enrollment>(updated);
   },
@@ -541,7 +545,7 @@ export const progressApi = {
   getCourseProgress: async (courseId: string): Promise<{ progress: Progress[]; percentage: number }> => {
     const user = auth.currentUser;
     if (!user) return { progress: [], percentage: 0 };
-    
+
     const progressSnapshot = await getDocs(
       query(
         collection(db, COLLECTIONS.PROGRESS),
@@ -549,30 +553,30 @@ export const progressApi = {
         where('courseId', '==', courseId)
       )
     );
-    
+
     const progress = progressSnapshot.docs.map(doc => docToData<Progress>(doc));
-    
+
     // Get lesson count
     const lessonsSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', courseId))
     );
-    
+
     const totalLessons = lessonsSnapshot.size;
     const completedLessons = progress.filter(p => p.completed).length;
     const percentage = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
-    
+
     return { progress, percentage };
   },
-  
+
   updateLessonProgress: async (lessonId: string, completed: boolean): Promise<Progress> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Get lesson to find courseId
     const lessonDoc = await getDoc(doc(db, COLLECTIONS.LESSONS, lessonId));
     if (!lessonDoc.exists()) throw new Error('Lesson not found');
     const lesson = lessonDoc.data();
-    
+
     // Check if progress exists
     const existingSnapshot = await getDocs(
       query(
@@ -581,18 +585,18 @@ export const progressApi = {
         where('lessonId', '==', lessonId)
       )
     );
-    
+
     if (!existingSnapshot.empty) {
       const progressDoc = existingSnapshot.docs[0];
       await updateDoc(progressDoc.ref, {
         completed,
         completedAt: completed ? serverTimestamp() : null,
       });
-      
+
       const updated = await getDoc(progressDoc.ref);
       return docToData<Progress>(updated);
     }
-    
+
     const progressData = {
       userId: user.uid,
       lessonId,
@@ -601,16 +605,16 @@ export const progressApi = {
       viewedAt: serverTimestamp(),
       completedAt: completed ? serverTimestamp() : null,
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.PROGRESS), progressData);
-    
+
     // Award points if completed
     if (completed) {
       await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), {
         points: increment(10),
       });
     }
-    
+
     return { id: docRef.id, ...progressData, viewedAt: new Date(), completedAt: completed ? new Date() : undefined } as Progress;
   },
 };
@@ -623,33 +627,35 @@ export const reviewsApi = {
     const snapshot = await getDocs(
       query(collection(db, COLLECTIONS.REVIEWS), where('courseId', '==', courseId))
     );
-    
+
     const reviews = await Promise.all(
       snapshot.docs.map(async (reviewDoc) => {
         const review = docToData<Review>(reviewDoc);
         let user: User = { id: review.userId, displayName: 'Anonymous', email: '', role: 'learner', points: 0 } as User;
-        
-        try {
-          const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, review.userId));
-          if (userDoc.exists()) {
-            user = docToData<User>(userDoc);
-          }
-        } catch (e) {}
-        
+
+        if (review.userId) {
+          try {
+            const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, review.userId));
+            if (userDoc.exists()) {
+              user = docToData<User>(userDoc);
+            }
+          } catch (e) { }
+        }
+
         return { ...review, user };
       })
     );
-    
+
     const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
     const averageRating = reviews.length > 0 ? totalRating / reviews.length : 0;
-    
+
     return { reviews, averageRating };
   },
-  
+
   create: async (courseId: string, data: InsertReview): Promise<Review> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     const reviewData = {
       ...data,
       courseId,
@@ -657,21 +663,21 @@ export const reviewsApi = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.REVIEWS), reviewData);
     return { id: docRef.id, ...reviewData, createdAt: new Date(), updatedAt: new Date() } as Review;
   },
-    
+
   update: async (reviewId: string, data: Partial<InsertReview>): Promise<Review> => {
     await updateDoc(doc(db, COLLECTIONS.REVIEWS, reviewId), {
       ...data,
       updatedAt: serverTimestamp(),
     });
-    
+
     const updated = await getDoc(doc(db, COLLECTIONS.REVIEWS, reviewId));
     return docToData<Review>(updated);
   },
-    
+
   delete: async (reviewId: string): Promise<void> => {
     await deleteDoc(doc(db, COLLECTIONS.REVIEWS, reviewId));
   },
@@ -687,7 +693,7 @@ export const invitationsApi = {
     );
     return snapshot.docs.map(doc => docToData<Invitation>(doc));
   },
-  
+
   send: async (courseId: string, email: string): Promise<Invitation> => {
     const invitationData = {
       courseId,
@@ -695,7 +701,7 @@ export const invitationsApi = {
       status: 'pending',
       createdAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, COLLECTIONS.INVITATIONS), invitationData);
     return { id: docRef.id, ...invitationData, createdAt: new Date() } as Invitation;
   },
@@ -708,17 +714,17 @@ export const reportingApi = {
   getOverview: async (): Promise<ReportingOverview> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Get instructor's courses
     const coursesSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.COURSES), where('instructorId', '==', user.uid))
     );
-    
+
     const courseIds = coursesSnapshot.docs.map(d => d.id);
-    
+
     let totalEnrollments = 0;
     let completedEnrollments = 0;
-    
+
     if (courseIds.length > 0) {
       for (const courseId of courseIds) {
         const enrollmentsSnapshot = await getDocs(
@@ -728,10 +734,10 @@ export const reportingApi = {
         completedEnrollments += enrollmentsSnapshot.docs.filter(d => d.data().status === 'completed').length;
       }
     }
-    
+
     // Calculate in-progress enrollments
     const inProgressEnrollments = totalEnrollments - completedEnrollments;
-    
+
     return {
       totalParticipants: totalEnrollments,
       yetToStart: 0,
@@ -739,39 +745,39 @@ export const reportingApi = {
       completed: completedEnrollments,
     } as ReportingOverview;
   },
-  
+
   getDetails: async (courseId?: string): Promise<ReportingDetail[]> => {
     const user = auth.currentUser;
     if (!user) return [];
-    
+
     let q = query(collection(db, COLLECTIONS.COURSES), where('instructorId', '==', user.uid));
-    
+
     const snapshot = await getDocs(q);
     const details: ReportingDetail[] = [];
-    
+
     for (const courseDoc of snapshot.docs) {
       if (courseId && courseDoc.id !== courseId) continue;
-      
+
       const course = docToData<Course>(courseDoc);
-      
+
       const enrollmentsSnapshot = await getDocs(
         query(collection(db, COLLECTIONS.ENROLLMENTS), where('courseId', '==', courseDoc.id))
       );
-      
+
       // Get each enrollment as a detail row
       for (const enrollDoc of enrollmentsSnapshot.docs) {
         const enrollment = enrollDoc.data();
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, enrollment.userId));
         const userData = userDoc.exists() ? userDoc.data() : null;
-        
+
         const enrolledDate = enrollment.enrolledAt?.toDate?.() || new Date();
         const startDate = enrollment.startedAt?.toDate?.() || null;
         const completedDate = enrollment.completedAt?.toDate?.() || null;
-        
+
         let status: 'yet_to_start' | 'in_progress' | 'completed' = 'yet_to_start';
         if (enrollment.status === 'completed') status = 'completed';
         else if (startDate) status = 'in_progress';
-        
+
         details.push({
           courseId: courseDoc.id,
           courseName: course.title,
@@ -786,7 +792,7 @@ export const reportingApi = {
         });
       }
     }
-    
+
     return details;
   },
 };
@@ -804,21 +810,21 @@ const BADGES = [
 
 export const gamificationApi = {
   getBadges: async () => BADGES,
-  
+
   getUserBadge: async (userId: string) => {
     const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
     const points = userDoc.exists() ? (userDoc.data().points || 0) : 0;
-    
+
     let currentBadge = BADGES[0];
     let nextBadge: typeof BADGES[0] | null = null;
-    
+
     for (let i = 0; i < BADGES.length; i++) {
       if (points >= BADGES[i].points) {
         currentBadge = BADGES[i];
         nextBadge = BADGES[i + 1] || null;
       }
     }
-    
+
     return {
       currentBadge,
       nextBadge,
@@ -835,13 +841,13 @@ export const adminApi = {
   getAllUsers: async (): Promise<User[]> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Verify admin role
     const currentUserDoc = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     if (!currentUserDoc.exists() || currentUserDoc.data().role !== 'admin') {
       throw new Error('Unauthorized: Admin access required');
     }
-    
+
     const snapshot = await getDocs(collection(db, COLLECTIONS.USERS));
     return snapshot.docs.map(doc => docToData<User>(doc));
   },
@@ -850,13 +856,13 @@ export const adminApi = {
   getInstructors: async (): Promise<User[]> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Verify admin role
     const currentUserDoc = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     if (!currentUserDoc.exists() || currentUserDoc.data().role !== 'admin') {
       throw new Error('Unauthorized: Admin access required');
     }
-    
+
     const snapshot = await getDocs(
       query(collection(db, COLLECTIONS.USERS), where('role', '==', 'instructor'))
     );
@@ -867,13 +873,13 @@ export const adminApi = {
   createInstructor: async (email: string, password: string, displayName: string): Promise<User> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Verify admin role
     const currentUserDoc = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     if (!currentUserDoc.exists() || currentUserDoc.data().role !== 'admin') {
       throw new Error('Unauthorized: Admin access required');
     }
-    
+
     // Validate inputs
     if (!email || !email.includes('@')) {
       throw new Error('Please enter a valid email address');
@@ -884,16 +890,16 @@ export const adminApi = {
     if (!displayName || displayName.trim().length < 2) {
       throw new Error('Display name must be at least 2 characters long');
     }
-    
+
     let newUserId: string | null = null;
-    
+
     // Step 1: Create user in Firebase Auth
     try {
       console.log('Creating instructor with email:', email);
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       newUserId = userCredential.user.uid;
       console.log('User created in Firebase Auth with ID:', newUserId);
-      
+
       // Sign out from secondary auth immediately
       await signOut(secondaryAuth);
     } catch (error: any) {
@@ -903,11 +909,11 @@ export const adminApi = {
         message: error?.message,
         fullError: error
       });
-      
+
       // Handle Firebase Auth errors with user-friendly messages
       const errorCode = error?.code || '';
       const errorMessage = error?.message || '';
-      
+
       if (errorCode === 'auth/email-already-in-use') {
         throw new Error('This email address is already registered in Firebase Auth');
       } else if (errorCode === 'auth/invalid-email') {
@@ -924,12 +930,12 @@ export const adminApi = {
         throw new Error(`Firebase Auth Error: ${errorCode || 'unknown'} - ${errorMessage || 'Failed to create account'}`);
       }
     }
-    
+
     // Step 2: Create user document in Firestore
     if (!newUserId) {
       throw new Error('Failed to create user - no user ID returned');
     }
-    
+
     const instructorData = {
       email,
       displayName: displayName.trim(),
@@ -938,7 +944,7 @@ export const adminApi = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
-    
+
     try {
       console.log('Creating Firestore document for user:', newUserId);
       await setDoc(doc(db, COLLECTIONS.USERS, newUserId), instructorData);
@@ -949,7 +955,7 @@ export const adminApi = {
         message: firestoreError?.message,
         fullError: firestoreError
       });
-      
+
       // User was created in Auth but Firestore failed
       // This is likely a permissions issue
       const errorMsg = firestoreError?.message || '';
@@ -962,7 +968,7 @@ export const adminApi = {
       }
       throw new Error(`User created in Auth but Firestore failed: ${errorMsg}`);
     }
-    
+
     return {
       id: newUserId,
       ...instructorData,
@@ -970,20 +976,20 @@ export const adminApi = {
       updatedAt: new Date()
     } as User;
   },
-  
+
   getPlatformStats: async () => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     const [usersSnapshot, coursesSnapshot, enrollmentsSnapshot] = await Promise.all([
       getDocs(collection(db, COLLECTIONS.USERS)),
       getDocs(collection(db, COLLECTIONS.COURSES)),
       getDocs(collection(db, COLLECTIONS.ENROLLMENTS)),
     ]);
-    
+
     const users = usersSnapshot.docs.map(doc => doc.data());
     const enrollments = enrollmentsSnapshot.docs.map(doc => doc.data());
-    
+
     // Count new users this month
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -991,10 +997,10 @@ export const adminApi = {
       const createdAt = u.createdAt?.toDate?.() || new Date(0);
       return createdAt >= startOfMonth;
     }).length;
-    
+
     // Count completed enrollments
     const completedEnrollments = enrollments.filter((e: any) => e.completedAt).length;
-    
+
     return {
       totalUsers: usersSnapshot.size,
       totalCourses: coursesSnapshot.size,
@@ -1003,41 +1009,41 @@ export const adminApi = {
       newUsersThisMonth,
     };
   },
-  
+
   updateUserRole: async (userId: string, role: 'admin' | 'instructor' | 'learner'): Promise<void> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Verify admin role
     const currentUserDoc = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     if (!currentUserDoc.exists() || currentUserDoc.data().role !== 'admin') {
       throw new Error('Unauthorized: Admin access required');
     }
-    
+
     await updateDoc(doc(db, COLLECTIONS.USERS, userId), {
       role,
       updatedAt: serverTimestamp(),
     });
   },
-  
+
   deleteUser: async (userId: string): Promise<void> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Verify admin role
     const currentUserDoc = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     if (!currentUserDoc.exists() || currentUserDoc.data().role !== 'admin') {
       throw new Error('Unauthorized: Admin access required');
     }
-    
+
     // Prevent self-deletion
     if (userId === user.uid) {
       throw new Error('Cannot delete your own account');
     }
-    
+
     // Delete user document
     await deleteDoc(doc(db, COLLECTIONS.USERS, userId));
-    
+
     // Optionally: Delete user's enrollments, progress, etc.
     const enrollmentsSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.ENROLLMENTS), where('userId', '==', userId))
@@ -1046,41 +1052,41 @@ export const adminApi = {
     enrollmentsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
   },
-  
+
   deleteCourse: async (courseId: string): Promise<void> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
-    
+
     // Verify admin role
     const currentUserDoc = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
     if (!currentUserDoc.exists() || currentUserDoc.data().role !== 'admin') {
       throw new Error('Unauthorized: Admin access required');
     }
-    
+
     // Delete course and related data
     const batch = writeBatch(db);
-    
+
     // Delete lessons
     const lessonsSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', courseId))
     );
     lessonsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-    
+
     // Delete quizzes
     const quizzesSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.QUIZZES), where('courseId', '==', courseId))
     );
     quizzesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-    
+
     // Delete enrollments
     const enrollmentsSnapshot = await getDocs(
       query(collection(db, COLLECTIONS.ENROLLMENTS), where('courseId', '==', courseId))
     );
     enrollmentsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-    
+
     // Delete course
     batch.delete(doc(db, COLLECTIONS.COURSES, courseId));
-    
+
     await batch.commit();
   },
 };

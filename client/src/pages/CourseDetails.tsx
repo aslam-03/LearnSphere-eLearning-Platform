@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Link, Redirect, useRoute } from "wouter";
 import { useState } from "react";
-import { 
-  Clock, 
-  Users, 
-  BarChart, 
-  CheckCircle2, 
+import {
+  Clock,
+  Users,
+  BarChart,
+  CheckCircle2,
   PlayCircle,
   Lock,
   FileText,
@@ -24,23 +24,22 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-function StarRating({ rating, onRatingChange, interactive = false }: { 
-  rating: number; 
+function StarRating({ rating, onRatingChange, interactive = false }: {
+  rating: number;
   onRatingChange?: (rating: number) => void;
   interactive?: boolean;
 }) {
   const [hover, setHover] = useState(0);
-  
+
   return (
     <div className="flex gap-1">
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          className={`w-5 h-5 cursor-${interactive ? 'pointer' : 'default'} transition-colors ${
-            star <= (hover || rating) 
-              ? 'fill-yellow-400 text-yellow-400' 
-              : 'text-gray-300'
-          }`}
+          className={`w-5 h-5 cursor-${interactive ? 'pointer' : 'default'} transition-colors ${star <= (hover || rating)
+            ? 'fill-yellow-400 text-yellow-400'
+            : 'text-gray-300'
+            }`}
           onClick={() => interactive && onRatingChange?.(star)}
           onMouseEnter={() => interactive && setHover(star)}
           onMouseLeave={() => interactive && setHover(0)}
@@ -53,9 +52,9 @@ function StarRating({ rating, onRatingChange, interactive = false }: {
 export default function CourseDetails() {
   const [, params] = useRoute("/courses/:id");
   const courseId = params?.id || "";
-  
+
   const { user, isAuthenticated } = useAuth();
-  const { data: course, isLoading } = useCourse(courseId);
+  const { data: course, isLoading, error } = useCourse(courseId);
   const { data: enrollments } = useMyEnrollments();
   const { data: reviewsResponse } = useReviews(courseId);
   const enroll = useEnroll();
@@ -68,20 +67,50 @@ export default function CourseDetails() {
   const [newReviewRating, setNewReviewRating] = useState(0);
   const [newReviewContent, setNewReviewContent] = useState("");
 
-  if (isLoading) return null;
-  if (!course) return <Redirect to="/404" />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading course details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !course) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+          <FileText className="w-8 h-8 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-bold mb-2">Unable to Load Course</h1>
+        <p className="text-muted-foreground mb-6 max-w-md">
+          {error ? (error as Error).message : "The course you requested could not be found."}
+        </p>
+        <div className="flex gap-4">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+          <Link href="/courses">
+            <Button>Return to Catalog</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const isEnrolled = enrollments?.some(e => e.courseId === courseId);
   const isInstructor = user?.id === course.instructorId;
   const userHasReviewed = reviewsList?.some(r => r.userId === user?.id);
-  
+
   // Use API average rating directly
   const avgRating = apiAverageRating;
-  
+
   // Check course visibility and access
   const isPublished = course.published !== false;
   const canPreview = isInstructor || user?.role === 'admin';
-  const hasAccess = isEnrolled || canPreview || 
+  const hasAccess = isEnrolled || canPreview ||
     (course.accessRule === 'open' && isPublished);
 
   const handleEnroll = () => {
@@ -97,8 +126,7 @@ export default function CourseDetails() {
       createReview.mutate({
         courseId,
         rating: newReviewRating,
-        content: newReviewContent.trim(),
-        userId: user?.id || '',
+        comment: newReviewContent.trim(),
       });
       setNewReviewRating(0);
       setNewReviewContent("");
@@ -132,11 +160,11 @@ export default function CourseDetails() {
                 </Badge>
                 <span className="text-blue-200 text-sm">Last updated {new Date(course.createdAt).toLocaleDateString()}</span>
               </div>
-              
+
               <h1 className="text-4xl md:text-5xl font-display font-bold leading-tight">
                 {course.title}
               </h1>
-              
+
               <p className="text-xl text-blue-100 leading-relaxed max-w-2xl">
                 {course.description}
               </p>
@@ -144,10 +172,10 @@ export default function CourseDetails() {
               <div className="flex items-center gap-6 pt-4 text-sm font-medium">
                 <div className="flex items-center gap-2">
                   <Avatar className="h-8 w-8 border-2 border-white/20">
-                    <AvatarImage src={course.instructor?.profileImageUrl || undefined} />
-                    <AvatarFallback>{course.instructor?.username?.slice(0, 2).toUpperCase() || 'IN'}</AvatarFallback>
+                    <AvatarImage src={course.instructor?.photoURL || undefined} />
+                    <AvatarFallback>{course.instructor?.displayName?.slice(0, 2).toUpperCase() || 'IN'}</AvatarFallback>
                   </Avatar>
-                  <span>By {course.instructor?.username || 'Instructor'}</span>
+                  <span>By {course.instructor?.displayName || 'Instructor'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <BarChart className="w-4 h-4" />
@@ -199,10 +227,10 @@ export default function CourseDetails() {
                 <div className="bg-white border rounded-2xl overflow-hidden">
                   <div className="bg-muted/30 p-4 border-b flex justify-between items-center text-sm">
                     <span>{course.lessons.length} Lessons</span>
-                    <span>Total duration: {course.duration || '4h 30m'}</span>
+                    <span>Total duration: {course.totalDuration ? `${Math.floor(course.totalDuration / 60)}h ${course.totalDuration % 60}m` : '4h 30m'}</span>
                   </div>
                   <div className="divide-y">
-                    {course.lessons.sort((a,b) => a.order - b.order).map((lesson, idx) => (
+                    {course.lessons.sort((a, b) => a.order - b.order).map((lesson, idx) => (
                       <div key={lesson.id} className="p-4 flex items-center gap-4 hover:bg-muted/10 transition-colors">
                         <div className="text-muted-foreground font-mono text-sm w-6">
                           {idx + 1}
@@ -251,10 +279,10 @@ export default function CourseDetails() {
                   <CardContent className="space-y-4">
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Your Rating</p>
-                      <StarRating 
-                        rating={newReviewRating} 
-                        onRatingChange={setNewReviewRating} 
-                        interactive 
+                      <StarRating
+                        rating={newReviewRating}
+                        onRatingChange={setNewReviewRating}
+                        interactive
                       />
                     </div>
                     <Textarea
@@ -263,7 +291,7 @@ export default function CourseDetails() {
                       onChange={(e) => setNewReviewContent(e.target.value)}
                       rows={4}
                     />
-                    <Button 
+                    <Button
                       onClick={handleSubmitReview}
                       disabled={!newReviewRating || !newReviewContent.trim() || createReview.isPending}
                     >
@@ -291,8 +319,8 @@ export default function CourseDetails() {
                             <span className="w-3">{star}</span>
                             <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                             <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-yellow-400 rounded-full" 
+                              <div
+                                className="h-full bg-yellow-400 rounded-full"
                                 style={{ width: `${percentage}%` }}
                               />
                             </div>
@@ -314,20 +342,20 @@ export default function CourseDetails() {
                         <div className="flex items-start gap-4">
                           <Avatar>
                             <AvatarFallback>
-                              {(review.user?.username || 'U').slice(0, 2).toUpperCase()}
+                              {(review.user?.displayName || 'U').slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
                             <div className="flex items-center justify-between mb-2">
                               <div>
-                                <p className="font-medium">{review.user?.username || 'Anonymous'}</p>
+                                <p className="font-medium">{review.user?.displayName || 'Anonymous'}</p>
                                 <StarRating rating={review.rating} />
                               </div>
                               <p className="text-sm text-muted-foreground">
                                 {new Date(review.createdAt).toLocaleDateString()}
                               </p>
                             </div>
-                            <p className="text-sm text-muted-foreground">{review.content}</p>
+                            <p className="text-sm text-muted-foreground">{review.comment}</p>
                           </div>
                         </div>
                       </CardContent>
@@ -349,9 +377,9 @@ export default function CourseDetails() {
           <div className="lg:absolute top-[-150px] w-full">
             <div className="bg-white rounded-2xl shadow-xl border overflow-hidden">
               <div className="aspect-video relative">
-                <img 
-                  src={course.coverImage || "https://images.unsplash.com/photo-1501504905252-473c47e087f8?w=800&q=80"} 
-                  className="w-full h-full object-cover" 
+                <img
+                  src={course.coverImage || "https://images.unsplash.com/photo-1501504905252-473c47e087f8?w=800&q=80"}
+                  className="w-full h-full object-cover"
                   alt={course.title}
                 />
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -360,7 +388,7 @@ export default function CourseDetails() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="p-6 space-y-6">
                 <div className="flex items-end gap-2">
                   <span className="text-3xl font-bold text-primary">
@@ -382,8 +410,8 @@ export default function CourseDetails() {
                     </Button>
                   </Link>
                 ) : (
-                  <Button 
-                    onClick={handleEnroll} 
+                  <Button
+                    onClick={handleEnroll}
                     disabled={enroll.isPending}
                     className="w-full h-12 text-lg font-semibold shadow-lg shadow-primary/20"
                   >
