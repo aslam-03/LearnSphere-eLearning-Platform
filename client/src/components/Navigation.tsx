@@ -1,11 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { 
-  BookOpen, 
-  LayoutDashboard, 
-  Settings, 
-  LogOut, 
+import {
+  BookOpen,
+  LayoutDashboard,
+  Settings,
+  LogOut,
   GraduationCap,
   Menu,
   X,
@@ -29,26 +29,26 @@ export function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => location === path;
-  
+
   // Different navigation based on user role
-  const navItems = user?.role === 'admin' 
+  const navItems = user?.role === 'admin'
     ? [
-        // Admin: Browse Courses first for all users
-        { label: "Browse Courses", path: "/courses", icon: BookOpen },
-        { label: "Admin Dashboard", path: "/admin", icon: Shield },
-        { label: "Learner Dashboard", path: "/dashboard", icon: LayoutDashboard },
-        { label: "Manage Instructors", path: "/admin/instructors", icon: Users },
-      ]
+      // Admin: Browse Courses first for all users
+      { label: "Browse Courses", path: "/courses", icon: BookOpen },
+      { label: "Admin Dashboard", path: "/admin", icon: Shield },
+      { label: "Learner Dashboard", path: "/dashboard", icon: LayoutDashboard },
+      { label: "Manage Instructors", path: "/admin/instructors", icon: Users },
+    ]
     : [
-        // Non-admin users
-        { label: "Browse Courses", path: "/courses", icon: BookOpen },
-        ...(isAuthenticated ? [
-          { label: "My Dashboard", path: "/dashboard", icon: LayoutDashboard },
-        ] : []),
-        ...(user?.role === "instructor" ? [
-          { label: "Instructor Hub", path: "/instructor", icon: Settings },
-        ] : []),
-      ];
+      // Non-admin users
+      { label: "Browse Courses", path: "/courses", icon: BookOpen },
+      ...(isAuthenticated && user?.role !== 'instructor' ? [
+        { label: "My Dashboard", path: "/dashboard", icon: LayoutDashboard },
+      ] : []),
+      ...(user?.role === "instructor" ? [
+        { label: "Instructor Hub", path: "/instructor", icon: Settings },
+      ] : []),
+    ];
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
@@ -118,7 +118,7 @@ export function Navigation() {
         </div>
 
         {/* Mobile Menu Toggle */}
-        <button 
+        <button
           className="md:hidden p-2 text-primary"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
@@ -143,8 +143,8 @@ export function Navigation() {
           ))}
           <div className="pt-2 border-t">
             {isAuthenticated ? (
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 className="w-full justify-start gap-2"
                 onClick={() => logout()}
               >

@@ -6,17 +6,31 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Redirect, useLocation } from "wouter";
 import { GraduationCap, Mail, Lock, User, Loader2 } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { loginSchema, signUpSchema, type LoginInput, type SignUpInput } from "@shared/types";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Auth() {
-  const { isAuthenticated, isLoading, signIn, signUp, signInWithGoogle, isSigningIn, isSigningUp, isSigningInWithGoogle, signInError, signUpError } = useAuth();
+  const { isAuthenticated, isLoading, signIn, signUp, signInWithGoogle, isSigningIn, isSigningUp, isSigningInWithGoogle, signInError, signUpError, resetPassword } = useAuth();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const { toast } = useToast();
 
   const loginForm = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -43,6 +57,38 @@ export default function Auth() {
   const handleGoogleSignIn = () => {
     signInWithGoogle(undefined, {
       onSuccess: () => setLocation("/courses")
+    });
+  };
+
+  const handleResetPassword = () => {
+    if (!resetEmail) {
+      toast({
+        title: "Email required",
+        description: "Please enter your email address to reset your password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsResetting(true);
+    resetPassword(resetEmail, {
+      onSuccess: () => {
+        setIsResetting(false);
+        setIsForgotPasswordOpen(false);
+        setResetEmail("");
+        toast({
+          title: "Email sent",
+          description: "Check your email for the password reset link.",
+        });
+      },
+      onError: (error: any) => {
+        setIsResetting(false);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to send reset email.",
+          variant: "destructive",
+        });
+      }
     });
   };
 
@@ -127,7 +173,18 @@ export default function Auth() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="login-password">Password</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="login-password">Password</Label>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-xs font-normal"
+                        type="button"
+                        onClick={() => setIsForgotPasswordOpen(true)}
+                      >
+                        Forgot password?
+                      </Button>
+                    </div>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
@@ -234,6 +291,38 @@ export default function Auth() {
           By continuing, you agree to our Terms of Service and Privacy Policy.
         </p>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Enter the email address associated with your account, and we'll send you a link to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Email Address</Label>
+              <Input
+                id="reset-email"
+                placeholder="you@example.com"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsForgotPasswordOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleResetPassword} disabled={isResetting}>
+              {isResetting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Send Reset Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
