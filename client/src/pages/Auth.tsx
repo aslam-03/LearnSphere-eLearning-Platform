@@ -30,19 +30,19 @@ export default function Auth() {
 
   const onLogin = (data: LoginInput) => {
     signIn(data, {
-      onSuccess: () => setLocation("/dashboard")
+      onSuccess: () => setLocation("/courses")
     });
   };
 
   const onSignUp = (data: SignUpInput) => {
     signUp(data, {
-      onSuccess: () => setLocation("/dashboard")
+      onSuccess: () => setLocation("/courses")
     });
   };
 
   const handleGoogleSignIn = () => {
     signInWithGoogle(undefined, {
-      onSuccess: () => setLocation("/dashboard")
+      onSuccess: () => setLocation("/courses")
     });
   };
 
@@ -55,7 +55,7 @@ export default function Auth() {
   }
 
   if (isAuthenticated) {
-    return <Redirect to="/dashboard" />;
+    return <Redirect to="/courses" />;
   }
 
   return (

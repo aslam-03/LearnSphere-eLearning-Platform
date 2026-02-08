@@ -33,11 +33,11 @@ export function Navigation() {
   // Different navigation based on user role
   const navItems = user?.role === 'admin' 
     ? [
-        // Admin: Admin Dashboard first, then Learner Dashboard, then Manage Instructors
+        // Admin: Browse Courses first for all users
+        { label: "Browse Courses", path: "/courses", icon: BookOpen },
         { label: "Admin Dashboard", path: "/admin", icon: Shield },
         { label: "Learner Dashboard", path: "/dashboard", icon: LayoutDashboard },
         { label: "Manage Instructors", path: "/admin/instructors", icon: Users },
-        { label: "Browse Courses", path: "/courses", icon: BookOpen },
       ]
     : [
         // Non-admin users

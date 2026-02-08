@@ -128,6 +128,7 @@ export const authFunctions = {
   // Sign out
   signOut: async () => {
     await signOut(auth);
+    window.location.href = '/';
   },
 
   // Password reset
