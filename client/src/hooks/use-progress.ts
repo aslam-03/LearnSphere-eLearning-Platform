@@ -15,7 +15,7 @@ export function useUpdateProgress() {
 
   return useMutation({
     mutationFn: ({ lessonId, completed, courseId }: { lessonId: string; completed: boolean; courseId: string }) =>
-      api.progress.updateLessonProgress(lessonId, completed),
+      api.progress.updateLessonProgress(lessonId, completed, courseId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['progress', variables.courseId] });
       queryClient.invalidateQueries({ queryKey: ['enrollments'] });

@@ -167,7 +167,6 @@ export default function Dashboard() {
                       key={enrollment.courseId} 
                       course={enrollment.course} 
                       isEnrolled={true}
-                      enrollmentStatus={enrollment.status}
                       progress={enrollment.progress || 0}
                     />
                   ))}

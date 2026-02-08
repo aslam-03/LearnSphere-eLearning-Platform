@@ -488,7 +488,7 @@ export default function Learn() {
     progressData?.some(p => p.lessonId === lessonId && p.completed);
 
   const handleComplete = () => {
-    if (activeLessonId) {
+    if (activeLessonId && !isCompleted(activeLessonId)) {
       updateProgress.mutate({
         lessonId: activeLessonId,
         completed: true,
@@ -505,12 +505,22 @@ export default function Learn() {
     }
   };
 
-  const handleQuizComplete = (score: number, points: number) => {
-    setEarnedPoints(points);
-    setShowPointsPopup(true);
-    setTimeout(() => setShowPointsPopup(false), 3000);
+  const handleAutoComplete = () => {
+    if (!activeLessonId || isCompleted(activeLessonId) || updateProgress.isPending) {
+      return;
+    }
 
-    if (activeLessonId) {
+    handleComplete();
+  };
+
+  const handleQuizComplete = (score: number, points: number) => {
+    if (points > 0) {
+      setEarnedPoints(points);
+      setShowPointsPopup(true);
+      setTimeout(() => setShowPointsPopup(false), 3000);
+    }
+
+    if (activeLessonId && !isCompleted(activeLessonId)) {
       updateProgress.mutate({
         lessonId: activeLessonId,
         completed: true,
@@ -520,6 +530,14 @@ export default function Learn() {
   };
 
   const handleQuizMarkComplete = () => {
+    if (activeLessonId && !isCompleted(activeLessonId)) {
+      updateProgress.mutate({
+        lessonId: activeLessonId,
+        completed: true,
+        courseId
+      });
+    }
+
     // Check if quiz is the last item and all previous items are completed
     const isLastLesson = activeIndex === allLessonsWithQuiz.length - 1;
     const allPreviousCompleted = completedNonQuizLessons === nonQuizLessons;
@@ -531,11 +549,6 @@ export default function Learn() {
     if (isLastLesson && allPreviousCompleted && allQuizzesCompleted) {
       // Course is complete!
       handleCourseComplete();
-    } else if (isLastLesson && allPreviousCompleted) {
-      // All lessons done, waiting for quiz completion
-      setShowPointsPopup(true);
-      setEarnedPoints(10);
-      setTimeout(() => setShowPointsPopup(false), 3000);
     }
   };
 
@@ -785,6 +798,7 @@ export default function Learn() {
                               src={activeLesson.content}
                               controls
                               className="w-full h-full"
+                              onEnded={handleAutoComplete}
                             />
                           )
                         ) : (

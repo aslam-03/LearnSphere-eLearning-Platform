@@ -403,6 +403,15 @@ export const quizzesApi = {
     );
     const attemptNumber = prevAttemptsSnapshot.size + 1;
 
+    const quizProgressSnapshot = await getDocs(
+      query(
+        collection(db, COLLECTIONS.PROGRESS),
+        where('userId', '==', user.uid),
+        where('lessonId', '==', `quiz-${quizId}`)
+      )
+    );
+    const isQuizAlreadyCompleted = quizProgressSnapshot.docs.some(doc => doc.data().completed);
+
     // Calculate points earned based on attempt number
     let pointsEarned = score;
     if (quiz.rewards) {
@@ -410,6 +419,10 @@ export const quizzesApi = {
       else if (attemptNumber === 2) pointsEarned = Math.round(score * quiz.rewards.attempt2 / 10);
       else if (attemptNumber === 3) pointsEarned = Math.round(score * quiz.rewards.attempt3 / 10);
       else pointsEarned = Math.round(score * quiz.rewards.attempt4Plus / 10);
+    }
+
+    if (isQuizAlreadyCompleted) {
+      pointsEarned = 0;
     }
 
     const attemptData = {
@@ -426,9 +439,11 @@ export const quizzesApi = {
     const docRef = await addDoc(collection(db, COLLECTIONS.QUIZ_ATTEMPTS), attemptData);
 
     // Award points to user
-    await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), {
-      points: increment(pointsEarned),
-    });
+    if (pointsEarned > 0) {
+      await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), {
+        points: increment(pointsEarned),
+      });
+    }
 
     return { id: docRef.id, ...attemptData, completedAt: new Date() } as QuizAttempt;
   },
@@ -448,11 +463,68 @@ export const quizzesApi = {
   },
 };
 
+async function getCourseProgressForUser(userId: string, courseId: string): Promise<{ progress: Progress[]; percentage: number }> {
+  // Get lesson count
+  const lessonsSnapshot = await getDocs(
+    query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', courseId))
+  );
+
+  const lessonIds = new Set(lessonsSnapshot.docs.map(doc => doc.id));
+
+  const progressSnapshot = await getDocs(
+    query(
+      collection(db, COLLECTIONS.PROGRESS),
+      where('userId', '==', userId),
+      where('courseId', '==', courseId)
+    )
+  );
+
+  let progress = progressSnapshot.docs.map(doc => docToData<Progress>(doc));
+
+  // Backfill progress records that predate courseId
+  if (progress.length === 0) {
+    const allProgressSnapshot = await getDocs(
+      query(collection(db, COLLECTIONS.PROGRESS), where('userId', '==', userId))
+    );
+
+    progress = allProgressSnapshot.docs
+      .map(doc => docToData<Progress>(doc))
+      .filter(p => lessonIds.has(p.lessonId));
+
+    const batch = writeBatch(db);
+    let hasUpdates = false;
+
+    allProgressSnapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (!data.courseId && lessonIds.has(data.lessonId)) {
+        batch.update(docSnap.ref, { courseId });
+        hasUpdates = true;
+      }
+    });
+
+    if (hasUpdates) {
+      await batch.commit();
+    }
+  }
+
+  const totalLessons = lessonsSnapshot.size;
+  const completedLessonIds = new Set(
+    progress
+      .filter(p => p.completed && lessonIds.has(p.lessonId))
+      .map(p => p.lessonId)
+  );
+  const percentage = totalLessons > 0
+    ? Math.min(100, Math.round((completedLessonIds.size / totalLessons) * 100))
+    : 0;
+
+  return { progress, percentage };
+}
+
 // =====================
 // ENROLLMENTS API
 // =====================
 export const enrollmentsApi = {
-  list: async (): Promise<(Enrollment & { course: Course })[]> => {
+  list: async (): Promise<(Enrollment & { course: Course; progress?: number })[]> => {
     const user = auth.currentUser;
     if (!user) return [];
 
@@ -472,7 +544,9 @@ export const enrollmentsApi = {
           }
         } catch (e) { }
 
-        return { ...enrollment, course };
+        const progressInfo = await getCourseProgressForUser(user.uid, enrollment.courseId);
+
+        return { ...enrollment, course, progress: progressInfo.percentage };
       })
     );
 
@@ -546,36 +620,25 @@ export const progressApi = {
     const user = auth.currentUser;
     if (!user) return { progress: [], percentage: 0 };
 
-    const progressSnapshot = await getDocs(
-      query(
-        collection(db, COLLECTIONS.PROGRESS),
-        where('userId', '==', user.uid),
-        where('courseId', '==', courseId)
-      )
-    );
-
-    const progress = progressSnapshot.docs.map(doc => docToData<Progress>(doc));
-
-    // Get lesson count
-    const lessonsSnapshot = await getDocs(
-      query(collection(db, COLLECTIONS.LESSONS), where('courseId', '==', courseId))
-    );
-
-    const totalLessons = lessonsSnapshot.size;
-    const completedLessons = progress.filter(p => p.completed).length;
-    const percentage = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
-
-    return { progress, percentage };
+    return getCourseProgressForUser(user.uid, courseId);
   },
 
-  updateLessonProgress: async (lessonId: string, completed: boolean): Promise<Progress> => {
+  updateLessonProgress: async (lessonId: string, completed: boolean, courseIdOverride?: string): Promise<Progress> => {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
 
-    // Get lesson to find courseId
+    // Get lesson to find courseId (quizzes don't exist in lessons collection)
     const lessonDoc = await getDoc(doc(db, COLLECTIONS.LESSONS, lessonId));
-    if (!lessonDoc.exists()) throw new Error('Lesson not found');
-    const lesson = lessonDoc.data();
+    let courseId = courseIdOverride;
+
+    if (lessonDoc.exists()) {
+      const lesson = lessonDoc.data();
+      courseId = lesson.courseId;
+    }
+
+    if (!courseId) {
+      throw new Error('Lesson not found');
+    }
 
     // Check if progress exists
     const existingSnapshot = await getDocs(
@@ -591,6 +654,7 @@ export const progressApi = {
       await updateDoc(progressDoc.ref, {
         completed,
         completedAt: completed ? serverTimestamp() : null,
+        courseId,
       });
 
       const updated = await getDoc(progressDoc.ref);
@@ -599,6 +663,7 @@ export const progressApi = {
 
     const progressData = {
       userId: user.uid,
+      courseId,
       lessonId,
       odId: `${user.uid}_${lessonId}`,
       completed,

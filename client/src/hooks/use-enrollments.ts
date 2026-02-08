@@ -1,11 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export function useMyEnrollments() {
+  const { user, isLoading } = useAuth();
+
   return useQuery({
     queryKey: ['enrollments'],
     queryFn: () => api.enrollments.list(),
+    enabled: !isLoading && !!user,
   });
 }
 

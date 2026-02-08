@@ -50,3 +50,4 @@ vite.config.ts.*
 *.cache
 
 attached_assets/
+docs/

@@ -243,6 +243,7 @@ export interface Progress {
   id: string;
   odId: string;
   userId: string;
+  courseId: string;
   lessonId: string;
   completed: boolean;
   viewedAt: Date;
@@ -251,6 +252,7 @@ export interface Progress {
 
 export const progressSchema = z.object({
   userId: z.string(),
+  courseId: z.string(),
   lessonId: z.string(),
   completed: z.boolean().default(false),
 });
